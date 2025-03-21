@@ -7,6 +7,11 @@ from datetime import datetime
 
 
 async def main(phone):
+    """Run the main program loop for Telegram chat management.
+
+    Args:
+        phone (str): User's phone number for Telegram login.
+    """
     setup_database()
     telegram = TelegramManager("session_name", API_ID, API_HASH)
     try:
@@ -51,37 +56,8 @@ async def main(phone):
             chat_name, chat_id = search_by_username(username, chats)
             if chat_id:
                 print(f"\nFound chat: {chat_name} (ID: {chat_id})")
-                filter_type, filter_value = await get_message_filter(telegram)
-                if filter_type:
-                    messages = load_messages(
-                        chat_id, filter_type, filter_value)
-                    if not messages:
-                        print(
-                            "No messages found in database, fetching from Telegram...")
-                        messages = await telegram.get_messages(chat_id, filter_type, filter_value)
-                        if messages is not None:
-                            try:
-                                save_messages(chat_id, messages)
-                            except Exception as e:
-                                print(
-                                    f"Error saving messages to database: {e}")
-                    else:
-                        print("Messages loaded from database.")
-                    if messages:
-                        save_search_history(username)
-                        print("\nMessages:")
-                        for i, (sender, msg, timestamp, _) in enumerate(messages, 1):
-                            print(
-                                f"{i}. {sender}: {msg} ({timestamp.strftime('%Y-%m-%d %H:%M:%S')})")
-                    else:
-                        if filter_type == "recent_messages":
-                            print(
-                                f"\nNo messages found in the last {filter_value} messages!")
-                        elif filter_type == "recent_days":
-                            print(
-                                f"\nNo messages found in the last {filter_value} days!")
-                        elif filter_type == "specific_date":
-                            print(f"\nNo messages found on {filter_value}!")
+                await process_chat_messages(telegram, chat_id, chat_name)
+                save_search_history(username)
             else:
                 print(f"\nNo private chat found with {username}!")
 
@@ -108,36 +84,7 @@ async def main(phone):
                         print("Invalid input! Please enter a valid number (e.g., 1)")
                 chat_name, chat_id = chats[choice][1], chats[choice][0]
                 print(f"\nSelected chat: {chat_name} (ID: {chat_id})")
-                filter_type, filter_value = await get_message_filter(telegram)
-                if filter_type:
-                    messages = load_messages(
-                        chat_id, filter_type, filter_value)
-                    if not messages:
-                        print(
-                            "No messages found in database, fetching from Telegram...")
-                        messages = await telegram.get_messages(chat_id, filter_type, filter_value)
-                        if messages is not None:
-                            try:
-                                save_messages(chat_id, messages)
-                            except Exception as e:
-                                print(
-                                    f"Error saving messages to database: {e}")
-                    else:
-                        print("Messages loaded from database.")
-                    if messages:
-                        print("\nMessages:")
-                        for i, (sender, msg, timestamp, _) in enumerate(messages, 1):
-                            print(
-                                f"{i}. {sender}: {msg} ({timestamp.strftime('%Y-%m-%d %H:%M:%S')})")
-                    else:
-                        if filter_type == "recent_messages":
-                            print(
-                                f"\nNo messages found in the last {filter_value} messages!")
-                        elif filter_type == "recent_days":
-                            print(
-                                f"\nNo messages found in the last {filter_value} days!")
-                        elif filter_type == "specific_date":
-                            print(f"\nNo messages found on {filter_value}!")
+                await process_chat_messages(telegram, chat_id, chat_name)
             else:
                 print("No private chats found!")
 
@@ -163,37 +110,7 @@ async def main(phone):
                 chat_name, chat_id = search_by_username(username, chats)
                 if chat_id:
                     print(f"\nFound chat: {chat_name} (ID: {chat_id})")
-                    filter_type, filter_value = await get_message_filter(telegram)
-                    if filter_type:
-                        messages = load_messages(
-                            chat_id, filter_type, filter_value)
-                        if not messages:
-                            print(
-                                "No messages found in database, fetching from Telegram...")
-                            messages = await telegram.get_messages(chat_id, filter_type, filter_value)
-                            if messages is not None:
-                                try:
-                                    save_messages(chat_id, messages)
-                                except Exception as e:
-                                    print(
-                                        f"Error saving messages to database: {e}")
-                        else:
-                            print("Messages loaded from database.")
-                        if messages:
-                            print("\nMessages:")
-                            for i, (sender, msg, timestamp, _) in enumerate(messages, 1):
-                                print(
-                                    f"{i}. {sender}: {msg} ({timestamp.strftime('%Y-%m-%d %H:%M:%S')})")
-                        else:
-                            if filter_type == "recent_messages":
-                                print(
-                                    f"\nNo messages found in the last {filter_value} messages!")
-                            elif filter_type == "recent_days":
-                                print(
-                                    f"\nNo messages found in the last {filter_value} days!")
-                            elif filter_type == "specific_date":
-                                print(
-                                    f"\nNo messages found on {filter_value}!")
+                    await process_chat_messages(telegram, chat_id, chat_name)
                 else:
                     print(f"\nNo private chat found with {username}!")
             else:
@@ -265,7 +182,51 @@ async def main(phone):
     await telegram.disconnect()
 
 
+async def process_chat_messages(telegram, chat_id, chat_name):
+    """Process and display messages for a given chat.
+
+    Args:
+        telegram (TelegramManager): Telegram client instance.
+        chat_id (int): ID of the chat to process.
+        chat_name (str): Name of the chat.
+    """
+    filter_type, filter_value = await get_message_filter(telegram)
+    if filter_type:
+        messages = load_messages(chat_id, filter_type, filter_value)
+        if not messages:
+            print("No messages found in database, fetching from Telegram...")
+            messages = await telegram.get_messages(chat_id, filter_type, filter_value)
+            if messages is not None:
+                try:
+                    save_messages(chat_id, messages)
+                except Exception as e:
+                    print(f"Error saving messages to database: {e}")
+        else:
+            print("Messages loaded from database.")
+        if messages:
+            print("\nMessages:")
+            for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
+                print(
+                    f"{i}. {sender}: {msg} (ID: {message_id}, {timestamp.strftime('%Y-%m-%d %H:%M:%S')})")
+        else:
+            if filter_type == "recent_messages":
+                print(
+                    f"\nNo messages found in the last {filter_value} messages!")
+            elif filter_type == "recent_days":
+                print(f"\nNo messages found in the last {filter_value} days!")
+            elif filter_type == "specific_date":
+                print(f"\nNo messages found on {filter_value}!")
+
+
 async def get_message_filter(telegram):
+    """Get the message filter type and value from user input.
+
+    Args:
+        telegram (TelegramManager): Telegram client instance.
+
+    Returns:
+        tuple: (filter_type, filter_value) or (None, None) if invalid.
+    """
     print("\nHow would you like to fetch messages?")
     print("1. Recent messages (e.g., last 10 messages)")
     print("2. Messages from recent days (e.g., last 7 days)")
@@ -303,6 +264,7 @@ async def get_message_filter(telegram):
             if specific_date:
                 return "specific_date", date
             # If the date is invalid, it will prompt again
+
 
 if __name__ == '__main__':
     while True:
