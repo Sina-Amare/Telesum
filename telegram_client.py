@@ -1,3 +1,4 @@
+# telegram_client.py
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError
 from telethon.tl.types import User
@@ -6,9 +7,16 @@ import os
 from datetime import datetime, timedelta
 import pytz
 from utils import get_sender_name, get_message_content
+from database import save_messages
+
+
+# Base directory for session file
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class TelegramManager:
+    """Manages Telegram client operations such as connection, login, and message fetching."""
+
     def __init__(self, session_name, api_id, api_hash):
         """Initialize the Telegram client.
 
@@ -17,12 +25,12 @@ class TelegramManager:
             api_id (str): Telegram API ID.
             api_hash (str): Telegram API hash.
         """
-        session_path = os.path.join("data", session_name)
+        session_path = os.path.join(BASE_DIR, "data", session_name)
         self.client = TelegramClient(session_path, api_id, api_hash)
         self.me = None  # To store current user info
 
     async def connect(self):
-        """Connect to Telegram servers."""
+        """Establish a connection to Telegram servers."""
         try:
             await self.client.connect()
             print("Connected to Telegram servers.")
@@ -31,13 +39,13 @@ class TelegramManager:
             raise
 
     async def login(self, phone):
-        """Log in to Telegram with the provided phone number.
+        """Log in to Telegram using the provided phone number.
 
         Args:
             phone (str): Phone number to log in with.
 
         Returns:
-            User: Logged-in user object.
+            User: The logged-in user object.
         """
         try:
             if not await self.client.is_user_authorized():
@@ -46,17 +54,17 @@ class TelegramManager:
                 print("Successfully logged in and session saved!")
             else:
                 print("Already logged in using saved session.")
-            self.me = await self.client.get_me()  # Store user info
+            self.me = await self.client.get_me()
             return self.me
         except Exception as e:
             print(f"Error logging into Telegram: {e}")
             raise
 
     async def fetch_chats(self):
-        """Fetch all private chats from Telegram.
+        """Retrieve all private chats from Telegram.
 
         Returns:
-            list: List of tuples (chat_id, name, username).
+            list: List of tuples containing (chat_id, name, username).
         """
         print("Loading chat list...")
         chats = []
@@ -71,41 +79,41 @@ class TelegramManager:
             print(f"Error loading chats: {e}")
             return []
 
-    async def safe_iter_messages(self, chat_id, limit=None, offset_id=0):
+    async def safe_iter_messages(self, chat_id, limit=None, offset_id=0, offset_date=None):
         """Safely iterate over messages with adaptive rate limiting.
 
         Args:
             chat_id (int): Chat ID to fetch messages from.
             limit (int, optional): Maximum number of messages to fetch.
-            offset_id (int, optional): Offset ID to start from.
+            offset_id (int, optional): Message ID to start fetching from.
+            offset_date (datetime, optional): Date to start fetching from.
 
         Yields:
             Message: Telegram message object.
         """
         while True:
             try:
-                async for msg in self.client.iter_messages(chat_id, limit=limit, offset_id=offset_id):
+                async for msg in self.client.iter_messages(chat_id, limit=limit, offset_id=offset_id, offset_date=offset_date):
                     yield msg
                 break
             except FloodWaitError as e:
                 print(f"Rate limit hit! Waiting {e.seconds} seconds...")
                 await asyncio.sleep(e.seconds)
 
-    async def get_messages(self, chat_id, filter_type, filter_value):
-        """Fetch messages from a chat based on the filter type.
+    async def get_messages(self, chat_id, filter_type, filter_value, user_timezone):
+        """Fetch messages from a chat based on the specified filter and user timezone.
 
         Args:
             chat_id (int): Chat ID to fetch messages from.
-            filter_type (str): Type of filter ('recent_messages', 'recent_days', 'specific_date').
-            filter_value: Value for the filter (int for recent, str for date).
+            filter_type (str): Filter type ('recent_messages', 'recent_days', 'specific_date').
+            filter_value: Filter value (int for recent, str for date).
+            user_timezone (pytz.timezone): User's timezone for date interpretation.
 
         Returns:
-            list: List of tuples (sender_name, message_content, date, message_id).
+            list: List of tuples (sender_name, message_content, date, message_id), or None if failed.
         """
         print(f"\nLoading messages from chat ID: {chat_id}...")
         messages = []
-        retry_count = 0
-        max_retries = 3
         try:
             if filter_type == "recent_messages":
                 async for message in self.safe_iter_messages(chat_id, limit=filter_value):
@@ -152,35 +160,58 @@ class TelegramManager:
                         f"Oldest message date: {oldest_date.strftime('%Y-%m-%d %H:%M:%S')}")
 
             elif filter_type == "specific_date":
-                specific_date = self._parse_date(filter_value)
-                if not specific_date:
-                    return None
-                if specific_date > self._make_aware_datetime(datetime.now()):
-                    print("You cannot fetch messages from a future date!")
-                    return None
-                min_date = self._make_aware_datetime(
-                    specific_date.replace(hour=0, minute=0, second=0, microsecond=0))
-                max_date = min_date + timedelta(days=1) - timedelta(seconds=1)
+                specific_date = datetime.strptime(filter_value, '%d %B %Y')
+                local_start = user_timezone.localize(
+                    specific_date.replace(hour=0, minute=0, second=0))
+                local_end = local_start.replace(hour=23, minute=59, second=59)
+                min_date = local_start.astimezone(pytz.UTC)
+                max_date = local_end.astimezone(pytz.UTC)
+
+                print(
+                    f"Fetching messages from {min_date} to {max_date} (UTC)...")
                 message_count = 0
-                async for message in self.safe_iter_messages(chat_id, limit=5000):
-                    message_count += 1
-                    print(
-                        f"Processing message {message_count}, date: {message.date.strftime('%Y-%m-%d %H:%M:%S')}")
-                    if min_date <= message.date <= max_date:
-                        sender = await message.get_sender()
-                        sender_name = get_sender_name(sender, self.me)
-                        message_content = get_message_content(message)
-                        messages.append(
-                            (sender_name, message_content, message.date, message.id))
-                    if message.date < min_date:
+                last_id = 0
+                while True:
+                    batch = []
+                    async for message in self.safe_iter_messages(chat_id, limit=100, offset_id=last_id):
+                        message_count += 1
+                        msg_date_str = message.date.strftime(
+                            '%Y-%m-%d %H:%M:%S')
+                        print(
+                            f"Fetched message {message_count}, date: {msg_date_str}")
+                        if message.date < min_date:
+                            print(
+                                f"Stopping: Message date {msg_date_str} is before {min_date}")
+                            break
+                        if min_date <= message.date <= max_date:
+                            sender = await message.get_sender()
+                            sender_name = get_sender_name(sender, self.me)
+                            message_content = get_message_content(message)
+                            batch.append(
+                                (sender_name, message_content, message.date, message.id))
+                        last_id = message.id
+                        await asyncio.sleep(0.5)
+                    if batch:
+                        messages.extend(batch)
+                    if not batch or message_count >= 1000:
                         break
-                    await asyncio.sleep(0.5)
-                print(f"Total messages processed: {message_count}")
+                print(f"Total messages fetched from Telegram: {message_count}")
+                print(f"Messages within date range: {len(messages)}")
 
         except Exception as e:
             print(
                 f"Error fetching messages: Could not connect to Telegram, please try again. (Details: {e})")
             return None
+
+        # Save fetched messages to database
+        if messages:
+            try:
+                save_messages(chat_id, messages)
+                print(
+                    f"Saved {len(messages)} new messages to database with timestamps.")
+            except Exception as e:
+                print(f"Error saving messages to database: {e}")
+
         return messages
 
     def _parse_date(self, date_str):
@@ -190,7 +221,7 @@ class TelegramManager:
             date_str (str): Date string in format 'DD Month YYYY'.
 
         Returns:
-            datetime: Parsed datetime object or None if invalid.
+            datetime: Parsed datetime object, or None if invalid.
         """
         try:
             return self._make_aware_datetime(datetime.strptime(date_str, "%d %B %Y"))
@@ -200,7 +231,7 @@ class TelegramManager:
             return None
 
     def _make_aware_datetime(self, dt):
-        """Convert date to offset-aware with UTC timezone.
+        """Convert a naive datetime to an offset-aware one with UTC timezone.
 
         Args:
             dt (datetime): Datetime object to convert.

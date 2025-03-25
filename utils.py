@@ -1,62 +1,61 @@
 # utils.py
-def search_by_username(username, chats):
-    """Search for a chat by username in the chat list.
-
-    Args:
-        username (str): Username to search for (with or without '@').
-        chats (list): List of tuples (chat_id, chat_name, chat_username).
-
-    Returns:
-        tuple: (chat_name, chat_id) if found, (None, None) otherwise.
-    """
-    username = username.lstrip('@').lower()
-    for chat_id, chat_name, chat_username in chats:
-        if chat_username and chat_username.lower() == username:
-            return chat_name, chat_id
-    return None, None
 
 
 def get_sender_name(sender, me):
-    """Get the display name of a message sender.
+    """Determine the sender's name for a message.
 
     Args:
-        sender: Telegram sender object or None.
-        me: Current user object from TelegramManager.
+        sender: Sender object from Telegram (User or None).
+        me: Current user object from Telegram.
 
     Returns:
-        str: Formatted sender name.
+        str: Sender's name or identifier.
     """
     if not sender:
         return "Unknown"
     if sender.id == me.id:
-        return f"{me.username}(me)" if me.username else "me"
-    return f"@{sender.username}" if sender.username else sender.first_name
+        return "me"
+    if sender.username:
+        return f"@{sender.username}"
+    return sender.first_name or "Unnamed"
 
 
 def get_message_content(message):
-    """Determine message type and return appropriate content.
+    """Extract content from a Telegram message.
 
     Args:
         message: Telegram message object.
 
     Returns:
-        str: Message content or type descriptor.
+        str: Message content or media type placeholder.
     """
-    if message.text:
-        return message.text
-    elif message.photo:
+    if message.message:
+        return message.message
+    if message.photo:
         return "[Photo]"
-    elif message.gif:
-        return "[GIF]"
-    elif message.video:
+    if message.video:
         return "[Video]"
-    elif message.audio:
-        return "[Audio]"
-    elif message.voice:
-        return "[Voice Message]"
-    elif message.sticker:
-        return "[Sticker]"
-    elif message.document:
+    if message.document:
         return "[Document]"
-    else:
-        return "[Unknown message type]"
+    if message.sticker:
+        return "[Sticker]"
+    if message.gif:
+        return "[GIF]"
+    return "[Unsupported message type]"
+
+
+def search_by_username(username, chats):
+    """Search for a chat by username in the list of chats.
+
+    Args:
+        username (str): Username to search for (with or without '@').
+        chats (list): List of tuples (chat_id, name, username).
+
+    Returns:
+        tuple: (chat_name, chat_id) if found, (None, None) otherwise.
+    """
+    username = username.lstrip('@').lower()
+    for chat_id, name, chat_username in chats:
+        if chat_username and chat_username.lower() == username:
+            return name, chat_id
+    return None, None

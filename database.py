@@ -1,3 +1,4 @@
+# database.py
 import sqlite3
 from datetime import datetime, timedelta
 import pytz
@@ -5,12 +6,14 @@ import os
 from config import MAX_MESSAGES_PER_CHAT
 
 
-DB_DIR = "data"
+# Base directory for database file
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_DIR = os.path.join(BASE_DIR, "data")
 DB_FILE = os.path.join(DB_DIR, "database.db")
 
 
 def setup_database():
-    """Set up the SQLite database and create necessary tables."""
+    """Initialize the SQLite database and create necessary tables."""
     if not os.path.exists(DB_DIR):
         os.makedirs(DB_DIR)
 
@@ -109,7 +112,7 @@ def load_search_history():
 
 
 def delete_search_history_entry(entry_id):
-    """Delete a specific search history entry.
+    """Delete a specific search history entry by ID.
 
     Args:
         entry_id (int): ID of the entry to delete.
@@ -122,7 +125,7 @@ def delete_search_history_entry(entry_id):
 
 
 def delete_all_search_history():
-    """Delete all search history entries."""
+    """Delete all entries from the search history."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("DELETE FROM search_history")
@@ -142,6 +145,8 @@ def save_messages(chat_id, messages):
     for sender, text, timestamp, message_id in messages:
         c.execute("INSERT OR IGNORE INTO messages (message_id, chat_id, sender, text, timestamp) VALUES (?, ?, ?, ?, ?)",
                   (message_id, chat_id, sender, text, timestamp.isoformat()))
+        print(
+            f"Saved message ID {message_id} with timestamp {timestamp.isoformat()}")
 
     c.execute("""
         DELETE FROM messages 
@@ -162,11 +167,14 @@ def load_messages(chat_id, filter_type, filter_value):
 
     Args:
         chat_id (int): ID of the chat.
-        filter_type (str): Type of filter ('recent_messages', 'recent_days', 'specific_date').
+        filter_type (str): Filter type ('recent_messages', 'recent_days', 'specific_date').
         filter_value: Value for the filter (int for recent, str for date).
 
     Returns:
-        list: List of tuples (sender, text, timestamp, message_id).
+        tuple: (messages, full_day_covered, latest_timestamp) where:
+            - messages: List of tuples (sender, text, timestamp, message_id).
+            - full_day_covered: Boolean indicating if the full day is covered (for specific_date only).
+            - latest_timestamp: Datetime of the latest message (for specific_date only), or None.
     """
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -192,5 +200,31 @@ def load_messages(chat_id, filter_type, filter_value):
     conn.close()
     print(
         f"Total messages loaded from database for chat {chat_id}: {len(messages)}")
-    return [(sender, text, msg_time.replace(tzinfo=pytz.UTC) if msg_time.tzinfo is None else msg_time, message_id)
-            for sender, text, msg_time, message_id in messages]
+
+    # Convert timestamps to UTC-aware
+    messages = [(sender, text, msg_time.replace(tzinfo=pytz.UTC) if msg_time.tzinfo is None else msg_time, message_id)
+                for sender, text, msg_time, message_id in messages]
+
+    # Check if full day is covered (only for specific_date)
+    if filter_type == "specific_date" and messages:
+        earliest_timestamp = min(msg[2] for msg in messages)
+        latest_timestamp = max(msg[2] for msg in messages)
+        full_day_covered = (earliest_timestamp <= specific_date.replace(hour=0, minute=0, second=0, tzinfo=pytz.UTC) and
+                            latest_timestamp >= specific_date.replace(hour=23, minute=59, second=59, tzinfo=pytz.UTC))
+        return messages, full_day_covered, latest_timestamp
+
+    return messages, False, None  # Default return for other filter types
+
+
+def delete_messages_by_chat_id(chat_id):
+    """Delete all messages for a specific chat ID from the database.
+
+    Args:
+        chat_id (int): ID of the chat whose messages should be deleted.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
+    conn.commit()
+    conn.close()
+    print(f"All messages for chat ID {chat_id} deleted from database.")
