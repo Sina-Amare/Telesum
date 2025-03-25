@@ -14,13 +14,10 @@ import pytz
 
 
 async def main(phone):
-    """Run the main program loop for Telegram chat management.
-
-    Args:
-        phone (str): User's phone number for Telegram login.
-    """
+    """Run the main program loop for Telegram chat management."""
     setup_database()
     telegram = TelegramManager("session_name", API_ID, API_HASH)
+    user_phone = phone  # Use phone as user identifier
 
     # Prompt user to select timezone based on country
     print("Please select your country for timezone settings:")
@@ -73,11 +70,11 @@ async def main(phone):
             print("Invalid choice! Please enter a number between 1 and 6 (e.g., 1)")
 
         if choice == "1":
-            chats = load_chats()
+            chats = load_chats(user_phone)
             if not chats:
                 print("No chats in database, refreshing...")
                 chats = await telegram.fetch_chats()
-                save_chats(chats)
+                save_chats(chats, user_phone)
             if chats:
                 print("\nYour private chats (real people only):")
                 for i, (chat_id, chat_name, _) in enumerate(chats, 1):
@@ -95,7 +92,7 @@ async def main(phone):
                         print("Invalid input! Please enter a valid number (e.g., 1)")
                 chat_name, chat_id = chats[choice][1], chats[choice][0]
                 print(f"\nSelected chat: {chat_name} (ID: {chat_id})")
-                await process_chat_messages(telegram, chat_id, chat_name, user_timezone)
+                await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
             else:
                 print("No private chats found!")
 
@@ -106,21 +103,21 @@ async def main(phone):
                     break
                 print(
                     "Username cannot be empty! Please enter a valid username (e.g., @username)")
-            chats = load_chats()
+            chats = load_chats(user_phone)
             if not chats:
                 print("No chats in database, refreshing...")
                 chats = await telegram.fetch_chats()
-                save_chats(chats)
+                save_chats(chats, user_phone)
             chat_name, chat_id = search_by_username(username, chats)
             if chat_id:
                 print(f"\nFound chat: {chat_name} (ID: {chat_id})")
-                await process_chat_messages(telegram, chat_id, chat_name, user_timezone)
-                save_search_history(username)
+                await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
+                save_search_history(username, user_phone)
             else:
                 print(f"\nNo private chat found with {username}!")
 
         elif choice == "3":
-            history = load_search_history()
+            history = load_search_history(user_phone)
             if history:
                 print("\nSearch history:")
                 for i, (entry_id, username, timestamp) in enumerate(history, 1):
@@ -137,11 +134,11 @@ async def main(phone):
                     except ValueError:
                         print("Invalid input! Please enter a valid number (e.g., 1)")
                 username = history[choice][1]
-                chats = load_chats()
+                chats = load_chats(user_phone)
                 chat_name, chat_id = search_by_username(username, chats)
                 if chat_id:
                     print(f"\nFound chat: {chat_name} (ID: {chat_id})")
-                    await process_chat_messages(telegram, chat_id, chat_name, user_timezone)
+                    await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
                 else:
                     print(f"\nNo private chat found with {username}!")
             else:
@@ -160,7 +157,7 @@ async def main(phone):
                 print("Invalid choice! Please enter a number between 1 and 4 (e.g., 1)")
 
             if sub_choice == "1":
-                history = load_search_history()
+                history = load_search_history(user_phone)
                 if history:
                     print("\nSearch history:")
                     for i, (entry_id, username, timestamp) in enumerate(history, 1):
@@ -185,14 +182,14 @@ async def main(phone):
                     print("No search history to delete!")
 
             elif sub_choice == "2":
-                history = load_search_history()
+                history = load_search_history(user_phone)
                 if history:
                     print(
                         "\nAre you sure you want to delete all search history? This action cannot be undone.")
                     confirmation = input(
                         "Enter 'yes' to confirm, 'no' to cancel: ").lower()
                     if confirmation == "yes":
-                        delete_all_search_history()
+                        delete_all_search_history(user_phone)
                         print("All search history deleted successfully!")
                     else:
                         print("Deletion canceled.")
@@ -200,7 +197,7 @@ async def main(phone):
                     print("No search history to delete!")
 
             elif sub_choice == "3":
-                history = load_search_history()
+                history = load_search_history(user_phone)
                 if history:
                     print("\nSearch history:")
                     for i, (entry_id, username, timestamp) in enumerate(history, 1):
@@ -218,14 +215,14 @@ async def main(phone):
                             print(
                                 "Invalid input! Please enter a valid number (e.g., 1)")
                     username = history[choice][1]
-                    chats = load_chats()
+                    chats = load_chats(user_phone)
                     chat_name, chat_id = search_by_username(username, chats)
                     if chat_id:
                         print(f"\nFound chat: {chat_name} (ID: {chat_id})")
                         confirmation = input(
                             f"Are you sure you want to delete all messages for {chat_name} (ID: {chat_id})? (yes/no): ").lower()
                         if confirmation == "yes":
-                            delete_messages_by_chat_id(chat_id)
+                            delete_messages_by_chat_id(chat_id, user_phone)
                             print(
                                 f"Messages for {chat_name} deleted successfully!")
                         else:
@@ -241,7 +238,7 @@ async def main(phone):
         elif choice == "5":
             print("Refreshing chat list...")
             chats = await telegram.fetch_chats()
-            save_chats(chats)
+            save_chats(chats, user_phone)
             print("Chat list refreshed successfully!")
 
         elif choice == "6":
@@ -250,59 +247,45 @@ async def main(phone):
     await telegram.disconnect()
 
 
-async def process_chat_messages(telegram, chat_id, chat_name, user_timezone):
-    """Process and display messages for a given chat, including a summary.
-
-    Args:
-        telegram (TelegramManager): Telegram client instance.
-        chat_id (int): ID of the chat to process.
-        chat_name (str): Name of the chat.
-        user_timezone (pytz.timezone): User-selected timezone.
-    """
+async def process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone):
+    """Process and display messages for a given chat, including a summary."""
     filter_type, filter_value = await get_message_filter(telegram)
     if filter_type:
         if filter_type == "recent_messages":
-            # Always fetch recent messages from Telegram first
             print("Fetching recent messages from Telegram...")
-            telegram_messages = await telegram.get_messages(chat_id, filter_type, filter_value, user_timezone)
+            telegram_messages = await telegram.get_messages(chat_id, filter_type, filter_value, user_timezone, user_phone)
             if telegram_messages:
                 try:
-                    save_messages(chat_id, telegram_messages)
-                    print(
-                        f"Saved {len(telegram_messages)} new messages to database.")
+                    # Save messages and report new ones
+                    save_messages(chat_id, telegram_messages, user_phone)
                 except Exception as e:
                     print(f"Error saving messages to database: {e}")
-            # Load the requested number of messages from database
             print("Loading messages from database...")
-            messages, _, _ = load_messages(chat_id, filter_type, filter_value)
+            messages, _, _ = load_messages(
+                chat_id, filter_type, filter_value, user_phone)
         else:
-            # For other filters (recent_days, specific_date), use existing logic
             print("Loading messages from database...")
             messages, full_day_covered, _ = load_messages(
-                chat_id, filter_type, filter_value)
+                chat_id, filter_type, filter_value, user_phone)
             if not messages or (filter_type == "specific_date" and not full_day_covered):
                 if not messages:
                     print("No messages found in database, fetching from Telegram...")
                 else:
                     print(
                         "Not all messages for this date are in the database, fetching from Telegram...")
-                telegram_messages = await telegram.get_messages(chat_id, filter_type, filter_value, user_timezone)
+                telegram_messages = await telegram.get_messages(chat_id, filter_type, filter_value, user_timezone, user_phone)
                 if telegram_messages:
-                    # Combine database and Telegram messages, deduplicate by message_id
                     messages = list({msg[3]: msg for msg in (
                         messages + telegram_messages)}.values())
-                    # Sort by timestamp
                     messages.sort(key=lambda x: x[2], reverse=True)
                     try:
-                        save_messages(chat_id, telegram_messages)
-                        print(
-                            f"Saved {len(telegram_messages)} new messages to database.")
+                        # Save messages and report new ones
+                        save_messages(chat_id, telegram_messages, user_phone)
                     except Exception as e:
                         print(f"Error saving messages to database: {e}")
                 else:
                     print("No messages fetched from Telegram.")
-            else:
-                print(f"Loaded {len(messages)} messages from database.")
+            # No need for additional "Loaded" message here since load_messages already reports it
 
         if messages:
             print("\nMessages:")
@@ -311,7 +294,6 @@ async def process_chat_messages(telegram, chat_id, chat_name, user_timezone):
                 print(
                     f"{i}. {sender}: {msg} (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})")
 
-            # Summarize message content
             message_texts = [msg for _, msg, _, _ in messages]
             print("\nSummary:")
             summary = summarize_text(message_texts)
@@ -327,14 +309,7 @@ async def process_chat_messages(telegram, chat_id, chat_name, user_timezone):
 
 
 async def get_message_filter(telegram):
-    """Get the message filter type and value from user input.
-
-    Args:
-        telegram (TelegramManager): Telegram client instance.
-
-    Returns:
-        tuple: (filter_type, filter_value) or (None, None) if invalid.
-    """
+    """Get the message filter type and value from user input."""
     print("\nHow would you like to fetch messages?")
     print("1. Recent messages (e.g., last 10 messages)")
     print("2. Messages from recent days (e.g., last 7 days)")

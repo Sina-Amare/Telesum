@@ -18,13 +18,7 @@ class TelegramManager:
     """Manages Telegram client operations such as connection, login, and message fetching."""
 
     def __init__(self, session_name, api_id, api_hash):
-        """Initialize the Telegram client.
-
-        Args:
-            session_name (str): Name of the session file.
-            api_id (str): Telegram API ID.
-            api_hash (str): Telegram API hash.
-        """
+        """Initialize the Telegram client."""
         session_path = os.path.join(BASE_DIR, "data", session_name)
         self.client = TelegramClient(session_path, api_id, api_hash)
         self.me = None  # To store current user info
@@ -39,14 +33,7 @@ class TelegramManager:
             raise
 
     async def login(self, phone):
-        """Log in to Telegram using the provided phone number.
-
-        Args:
-            phone (str): Phone number to log in with.
-
-        Returns:
-            User: The logged-in user object.
-        """
+        """Log in to Telegram using the provided phone number."""
         try:
             if not await self.client.is_user_authorized():
                 print("First-time login required.")
@@ -61,11 +48,7 @@ class TelegramManager:
             raise
 
     async def fetch_chats(self):
-        """Retrieve all private chats from Telegram.
-
-        Returns:
-            list: List of tuples containing (chat_id, name, username).
-        """
+        """Retrieve all private chats from Telegram."""
         print("Loading chat list...")
         chats = []
         try:
@@ -80,17 +63,7 @@ class TelegramManager:
             return []
 
     async def safe_iter_messages(self, chat_id, limit=None, offset_id=0, offset_date=None):
-        """Safely iterate over messages with adaptive rate limiting.
-
-        Args:
-            chat_id (int): Chat ID to fetch messages from.
-            limit (int, optional): Maximum number of messages to fetch.
-            offset_id (int, optional): Message ID to start fetching from.
-            offset_date (datetime, optional): Date to start fetching from.
-
-        Yields:
-            Message: Telegram message object.
-        """
+        """Safely iterate over messages with adaptive rate limiting."""
         while True:
             try:
                 async for msg in self.client.iter_messages(chat_id, limit=limit, offset_id=offset_id, offset_date=offset_date):
@@ -100,19 +73,10 @@ class TelegramManager:
                 print(f"Rate limit hit! Waiting {e.seconds} seconds...")
                 await asyncio.sleep(e.seconds)
 
-    async def get_messages(self, chat_id, filter_type, filter_value, user_timezone):
-        """Fetch messages from a chat based on the specified filter and user timezone.
-
-        Args:
-            chat_id (int): Chat ID to fetch messages from.
-            filter_type (str): Filter type ('recent_messages', 'recent_days', 'specific_date').
-            filter_value: Filter value (int for recent, str for date).
-            user_timezone (pytz.timezone): User's timezone for date interpretation.
-
-        Returns:
-            list: List of tuples (sender_name, message_content, date, message_id), or None if failed.
-        """
-        print(f"\nLoading messages from chat ID: {chat_id}...")
+    async def get_messages(self, chat_id, filter_type, filter_value, user_timezone, user_phone):
+        """Fetch messages from a chat based on the specified filter and user timezone."""
+        print(
+            f"\nLoading messages from chat ID: {chat_id} for user {user_phone}...")
         messages = []
         try:
             if filter_type == "recent_messages":
@@ -206,23 +170,16 @@ class TelegramManager:
         # Save fetched messages to database
         if messages:
             try:
-                save_messages(chat_id, messages)
+                save_messages(chat_id, messages, user_phone)
                 print(
-                    f"Saved {len(messages)} new messages to database with timestamps.")
+                    f"Saved {len(messages)} new messages to database with timestamps for user {user_phone}.")
             except Exception as e:
                 print(f"Error saving messages to database: {e}")
 
         return messages
 
     def _parse_date(self, date_str):
-        """Parse a date string into a datetime object.
-
-        Args:
-            date_str (str): Date string in format 'DD Month YYYY'.
-
-        Returns:
-            datetime: Parsed datetime object, or None if invalid.
-        """
+        """Parse a date string into a datetime object."""
         try:
             return self._make_aware_datetime(datetime.strptime(date_str, "%d %B %Y"))
         except ValueError:
@@ -231,14 +188,7 @@ class TelegramManager:
             return None
 
     def _make_aware_datetime(self, dt):
-        """Convert a naive datetime to an offset-aware one with UTC timezone.
-
-        Args:
-            dt (datetime): Datetime object to convert.
-
-        Returns:
-            datetime: Offset-aware datetime with UTC timezone.
-        """
+        """Convert a naive datetime to an offset-aware one with UTC timezone."""
         if dt.tzinfo is None:
             return dt.replace(tzinfo=pytz.UTC)
         return dt

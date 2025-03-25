@@ -13,7 +13,7 @@ DB_FILE = os.path.join(DB_DIR, "database.db")
 
 
 def setup_database():
-    """Initialize the SQLite database and create necessary tables."""
+    """Initialize the SQLite database and create necessary tables with user_phone column."""
     if not os.path.exists(DB_DIR):
         os.makedirs(DB_DIR)
 
@@ -21,13 +21,16 @@ def setup_database():
     c = conn.cursor()
 
     c.execute('''CREATE TABLE IF NOT EXISTS chats (
-                    id INTEGER PRIMARY KEY,
+                    id INTEGER,
                     name TEXT NOT NULL,
-                    username TEXT)''')
+                    username TEXT,
+                    user_phone TEXT NOT NULL,
+                    PRIMARY KEY (id, user_phone))''')
     c.execute('''CREATE TABLE IF NOT EXISTS search_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL,
-                    timestamp TEXT NOT NULL)''')
+                    timestamp TEXT NOT NULL,
+                    user_phone TEXT NOT NULL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     message_id INTEGER,
@@ -35,7 +38,8 @@ def setup_database():
                     sender TEXT,
                     text TEXT,
                     timestamp TEXT,
-                    UNIQUE(chat_id, message_id)
+                    user_phone TEXT NOT NULL,
+                    UNIQUE(chat_id, message_id, user_phone)
                 )''')
 
     c.execute("PRAGMA table_info(messages)")
@@ -43,80 +47,64 @@ def setup_database():
     if 'message_id' not in columns:
         c.execute("ALTER TABLE messages ADD COLUMN message_id INTEGER")
         c.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS unique_message ON messages (chat_id, message_id)")
+            "CREATE UNIQUE INDEX IF NOT EXISTS unique_message ON messages (chat_id, message_id, user_phone)")
+    if 'user_phone' not in columns:
+        c.execute(
+            "ALTER TABLE messages ADD COLUMN user_phone TEXT NOT NULL DEFAULT ''")
 
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_FILE}")
 
 
-def save_chats(chats):
-    """Save a list of chats to the SQLite database.
-
-    Args:
-        chats (list): List of tuples (chat_id, name, username) to save.
-    """
+def save_chats(chats, user_phone):
+    """Save a list of chats to the SQLite database for a specific user."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("DELETE FROM chats")
+    c.execute("DELETE FROM chats WHERE user_phone = ?", (user_phone,))
     for chat_id, name, username in chats:
-        c.execute("INSERT OR REPLACE INTO chats (id, name, username) VALUES (?, ?, ?)",
-                  (chat_id, name, username))
+        c.execute("INSERT OR REPLACE INTO chats (id, name, username, user_phone) VALUES (?, ?, ?, ?)",
+                  (chat_id, name, username, user_phone))
     conn.commit()
     conn.close()
 
 
-def load_chats():
-    """Load all chats from the SQLite database.
-
-    Returns:
-        list: List of tuples (id, name, username).
-    """
+def load_chats(user_phone):
+    """Load all chats from the SQLite database for a specific user."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT id, name, username FROM chats")
+    c.execute(
+        "SELECT id, name, username FROM chats WHERE user_phone = ?", (user_phone,))
     chats = c.fetchall()
     conn.close()
     return chats
 
 
-def save_search_history(username):
-    """Save a username to the search history.
-
-    Args:
-        username (str): Username to save.
-    """
+def save_search_history(username, user_phone):
+    """Save a username to the search history for a specific user."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     timestamp = datetime.now().isoformat()
-    c.execute("INSERT INTO search_history (username, timestamp) VALUES (?, ?)",
-              (username, timestamp))
+    c.execute("INSERT INTO search_history (username, timestamp, user_phone) VALUES (?, ?, ?)",
+              (username, timestamp, user_phone))
     conn.commit()
     conn.close()
 
 
-def load_search_history():
-    """Load the search history from the database.
-
-    Returns:
-        list: List of tuples (id, username, timestamp).
-    """
+def load_search_history(user_phone):
+    """Load the search history from the database for a specific user."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute(
-        "SELECT id, username, timestamp FROM search_history ORDER BY timestamp DESC")
+    c.execute("SELECT id, username, timestamp FROM search_history WHERE user_phone = ? ORDER BY timestamp DESC",
+              (user_phone,))
     history = c.fetchall()
     conn.close()
-    print(f"Total search history entries: {len(history)}")
+    print(f"Total search history entries for {user_phone}: {len(history)}")
     return history
 
 
 def delete_search_history_entry(entry_id):
-    """Delete a specific search history entry by ID.
-
-    Args:
-        entry_id (int): ID of the entry to delete.
-    """
+    """Delete a specific search history entry by ID."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("DELETE FROM search_history WHERE id = ?", (entry_id,))
@@ -124,82 +112,84 @@ def delete_search_history_entry(entry_id):
     conn.close()
 
 
-def delete_all_search_history():
-    """Delete all entries from the search history."""
+def delete_all_search_history(user_phone):
+    """Delete all entries from the search history for a specific user."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("DELETE FROM search_history")
+    c.execute("DELETE FROM search_history WHERE user_phone = ?", (user_phone,))
     conn.commit()
     conn.close()
 
 
-def save_messages(chat_id, messages):
-    """Save messages to the database for a specific chat.
-
-    Args:
-        chat_id (int): ID of the chat.
-        messages (list): List of tuples (sender, text, timestamp, message_id).
-    """
+def save_messages(chat_id, messages, user_phone):
+    """Save messages to the database for a specific chat and user, avoiding duplicates."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    for sender, text, timestamp, message_id in messages:
-        c.execute("INSERT OR IGNORE INTO messages (message_id, chat_id, sender, text, timestamp) VALUES (?, ?, ?, ?, ?)",
-                  (message_id, chat_id, sender, text, timestamp.isoformat()))
-        print(
-            f"Saved message ID {message_id} with timestamp {timestamp.isoformat()}")
+    new_messages_count = 0
 
+    for sender, text, timestamp, message_id in messages:
+        # Try to insert message; if it already exists (duplicate), it will be ignored due to UNIQUE constraint
+        try:
+            c.execute("INSERT INTO messages (message_id, chat_id, sender, text, timestamp, user_phone) VALUES (?, ?, ?, ?, ?, ?)",
+                      (message_id, chat_id, sender, text, timestamp.isoformat(), user_phone))
+            new_messages_count += 1  # Increment count only if a new message is inserted
+        except sqlite3.IntegrityError:
+            # Message already exists (duplicate), skip it silently
+            continue
+
+    # Remove excess messages beyond MAX_MESSAGES_PER_CHAT
     c.execute("""
         DELETE FROM messages 
-        WHERE chat_id = ? AND id NOT IN (
+        WHERE chat_id = ? AND user_phone = ? AND id NOT IN (
             SELECT id FROM messages 
-            WHERE chat_id = ? 
+            WHERE chat_id = ? AND user_phone = ? 
             ORDER BY timestamp DESC 
             LIMIT ?
         )
-    """, (chat_id, chat_id, MAX_MESSAGES_PER_CHAT))
+    """, (chat_id, user_phone, chat_id, user_phone, MAX_MESSAGES_PER_CHAT))
 
     conn.commit()
     conn.close()
 
+    if new_messages_count > 0:
+        print(
+            f"Saved {new_messages_count} new messages to database for chat ID {chat_id} and user {user_phone}.")
+    else:
+        print(
+            f"No new messages saved for chat ID {chat_id} and user {user_phone} (all were duplicates).")
 
-def load_messages(chat_id, filter_type, filter_value):
-    """Load messages from the database based on a filter.
 
-    Args:
-        chat_id (int): ID of the chat.
-        filter_type (str): Filter type ('recent_messages', 'recent_days', 'specific_date').
-        filter_value: Value for the filter (int for recent, str for date).
-
-    Returns:
-        tuple: (messages, full_day_covered, latest_timestamp) where:
-            - messages: List of tuples (sender, text, timestamp, message_id).
-            - full_day_covered: Boolean indicating if the full day is covered (for specific_date only).
-            - latest_timestamp: Datetime of the latest message (for specific_date only), or None.
-    """
+def load_messages(chat_id, filter_type, filter_value, user_phone):
+    """Load messages from the database based on a filter for a specific user."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
     if filter_type == "recent_messages":
-        c.execute("SELECT sender, text, timestamp, message_id FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?",
-                  (chat_id, filter_value))
+        c.execute("SELECT sender, text, timestamp, message_id FROM messages WHERE chat_id = ? AND user_phone = ? ORDER BY timestamp DESC LIMIT ?",
+                  (chat_id, user_phone, filter_value))
     elif filter_type == "recent_days":
         min_date = (datetime.now() - timedelta(days=filter_value)).isoformat()
-        c.execute("SELECT sender, text, timestamp, message_id FROM messages WHERE chat_id = ? AND timestamp >= ? ORDER BY timestamp DESC",
-                  (chat_id, min_date))
+        c.execute("SELECT sender, text, timestamp, message_id FROM messages WHERE chat_id = ? AND user_phone = ? AND timestamp >= ? ORDER BY timestamp DESC",
+                  (chat_id, user_phone, min_date))
     elif filter_type == "specific_date":
         specific_date = datetime.strptime(filter_value, "%d %B %Y")
         min_date = specific_date.replace(
             hour=0, minute=0, second=0, microsecond=0).isoformat()
         max_date = (specific_date + timedelta(days=1) -
                     timedelta(seconds=1)).isoformat()
-        c.execute("SELECT sender, text, timestamp, message_id FROM messages WHERE chat_id = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC",
-                  (chat_id, min_date, max_date))
+        c.execute("SELECT sender, text, timestamp, message_id FROM messages WHERE chat_id = ? AND user_phone = ? AND timestamp BETWEEN ? AND ? ORDER BY timestamp DESC",
+                  (chat_id, user_phone, min_date, max_date))
 
     messages = [(sender, text, datetime.fromisoformat(timestamp), message_id)
                 for sender, text, timestamp, message_id in c.fetchall()]
     conn.close()
-    print(
-        f"Total messages loaded from database for chat {chat_id}: {len(messages)}")
+
+    if messages:
+        print(
+            f"Messages found in database for chat ID {chat_id} and user {user_phone}: {len(messages)} total.")
+    else:
+        print(
+            f"No messages found in database for chat ID {chat_id} and user {user_phone} with the given filter.")
 
     # Convert timestamps to UTC-aware
     messages = [(sender, text, msg_time.replace(tzinfo=pytz.UTC) if msg_time.tzinfo is None else msg_time, message_id)
@@ -216,15 +206,13 @@ def load_messages(chat_id, filter_type, filter_value):
     return messages, False, None  # Default return for other filter types
 
 
-def delete_messages_by_chat_id(chat_id):
-    """Delete all messages for a specific chat ID from the database.
-
-    Args:
-        chat_id (int): ID of the chat whose messages should be deleted.
-    """
+def delete_messages_by_chat_id(chat_id, user_phone):
+    """Delete all messages for a specific chat ID and user from the database."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
+    c.execute("DELETE FROM messages WHERE chat_id = ? AND user_phone = ?",
+              (chat_id, user_phone))
     conn.commit()
     conn.close()
-    print(f"All messages for chat ID {chat_id} deleted from database.")
+    print(
+        f"All messages for chat ID {chat_id} and user {user_phone} deleted from database.")
