@@ -4,24 +4,25 @@ from config import OPENROUTER_API_KEY
 
 def summarize_text(messages):
     """
-    Summarizes a list of messages using DeepSeek via OpenRouter API.
+    Summarizes and analyzes a list of messages using DeepSeek via OpenRouter API.
 
     Args:
-        messages (list): A list of message texts to summarize.
+        messages (list): A list of message texts to summarize and analyze.
 
     Returns:
-        str: A concise summary of the messages or an error message if the request fails.
+        str: An analytical and concise summary of the messages or an error message if the request fails.
     """
     if not messages:
-        return "No messages to summarize."
+        return "هیچ پیامی برای خلاصه‌سازی وجود ندارد."
 
     # Combine messages into a single text block
     combined_text = "\n".join(messages)
     prompt = (
-        "به صورت منطقی پیام هارو خلاصه کن. "
-        "عبارات کلیدی و در نظر بگیر و جمع بندی ساختار یافته ای بده:\n\n"
+        "پیام‌ها را به فارسی خلاصه کن و تحلیل دقیقی از آن‌ها ارائه بده. "
+        "خلاصه باید به صورت یک پاراگراف خبری و تحلیلی باشد که نکات اصلی، عبارات کلیدی، روابط بین پیام‌ها، و احساسات مطرح‌شده را به‌طور جامع پوشش دهد. "
+        "لطفاً دقت کن که جمله‌ها به‌طور کامل به پایان برسند و خلاصه به‌صورت یک متن یکپارچه و بدون بریدگی یا قطع ناگهانی ارائه شود:\n\n"
         f"{combined_text}\n\n"
-        "Summary:"
+        "خلاصه:"
     )
 
     # OpenRouter API URL
@@ -37,8 +38,8 @@ def summarize_text(messages):
     payload = {
         "model": "deepseek/deepseek-chat",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 200,
-        "temperature": 0.5,
+        "max_tokens": 300,
+        "temperature": 0.7,
     }
 
     try:
@@ -49,8 +50,10 @@ def summarize_text(messages):
         # Extract and clean the summary
         summary = response.json()["choices"][0]["message"]["content"].strip()
 
-        # Remove redundant "Summary:" prefix if present
-        return summary[len("Summary:"):].strip() if summary.startswith("Summary:") else summary
+        # Ensure the summary is a single complete paragraph ending with proper punctuation.
+        if not summary.endswith('.'):
+            summary += "."
+        return summary
 
     except requests.exceptions.RequestException as e:
         return "API error: Unable to summarize messages."
@@ -63,10 +66,10 @@ def summarize_text(messages):
 # Optional test function
 if __name__ == "__main__":
     test_messages = [
-        "Hey, how are you today?",
-        "I'm good, thanks! What about you?",
-        "I'm great, just relaxing. Any plans?",
-        "Not much, maybe I'll watch a movie later."
+        "سلام، امروز چطوری؟",
+        "خوبم، مرسی! تو چطور؟",
+        "عالیم، فقط دارم استراحت می‌کنم. برنامه‌ای داری؟",
+        "چیز خاصی نه، شاید بعداً یه فیلم ببینم."
     ]
     summary = summarize_text(test_messages)
     print("Summary:", summary)
