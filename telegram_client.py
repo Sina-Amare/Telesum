@@ -1,4 +1,3 @@
-# telegram_client.py
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError
 from telethon.tl.types import User
@@ -8,7 +7,6 @@ from datetime import datetime, timedelta
 import pytz
 from utils import get_sender_name, get_message_content
 from database import save_messages
-
 
 # Base directory for session file
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -60,6 +58,34 @@ class TelegramManager:
             return chats
         except Exception as e:
             print(f"Error loading chats: {e}")
+            return []
+
+    async def fetch_new_chats(self, last_update_timestamp=None):
+        """Retrieve only new or updated private chats since the last update."""
+        print("Checking for new or updated chats...")
+        new_chats = []
+        try:
+            async for dialog in self.client.iter_dialogs():
+                if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
+                    # Ensure dialog.date is UTC-aware
+                    dialog_date = dialog.date if dialog.date.tzinfo else dialog.date.replace(
+                        tzinfo=pytz.UTC)
+                    # Include chats if no last_update_timestamp or if updated after it
+                    if last_update_timestamp is None or dialog_date > last_update_timestamp:
+                        new_chats.append(
+                            (dialog.id, dialog.name, dialog.entity.username))
+                    await asyncio.sleep(0.5)  # Delay to respect API limits
+            if new_chats:
+                print("New or updated chats found:")
+                for chat_id, name, username in new_chats:
+                    username_str = f" (@{username})" if username else ""
+                    print(f"- {name}{username_str} (ID: {chat_id})")
+            else:
+                print("No new or updated chats found.")
+            print(f"Total new or updated chats: {len(new_chats)}")
+            return new_chats
+        except Exception as e:
+            print(f"Error checking new chats: {e}")
             return []
 
     async def safe_iter_messages(self, chat_id, limit=None, offset_id=0, offset_date=None):

@@ -1,10 +1,8 @@
-# database.py
 import sqlite3
 from datetime import datetime, timedelta
 import pytz
 import os
 from config import MAX_MESSAGES_PER_CHAT
-
 
 # Base directory for database file
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -20,17 +18,22 @@ def setup_database():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
+    # Create chats table
     c.execute('''CREATE TABLE IF NOT EXISTS chats (
                     id INTEGER,
                     name TEXT NOT NULL,
                     username TEXT,
                     user_phone TEXT NOT NULL,
                     PRIMARY KEY (id, user_phone))''')
+
+    # Create search_history table
     c.execute('''CREATE TABLE IF NOT EXISTS search_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     user_phone TEXT NOT NULL)''')
+
+    # Create messages table
     c.execute('''CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     message_id INTEGER,
@@ -42,12 +45,20 @@ def setup_database():
                     UNIQUE(chat_id, message_id, user_phone)
                 )''')
 
+    # Create last_update table for tracking last chat update timestamp
+    c.execute('''CREATE TABLE IF NOT EXISTS last_update (
+                    user_phone TEXT PRIMARY KEY,
+                    last_update_timestamp TEXT NOT NULL)''')
+
+    # Add message_id column if not exists
     c.execute("PRAGMA table_info(messages)")
     columns = [col[1] for col in c.fetchall()]
     if 'message_id' not in columns:
         c.execute("ALTER TABLE messages ADD COLUMN message_id INTEGER")
         c.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_message ON messages (chat_id, message_id, user_phone)")
+
+    # Add user_phone column if not exists
     if 'user_phone' not in columns:
         c.execute(
             "ALTER TABLE messages ADD COLUMN user_phone TEXT NOT NULL DEFAULT ''")
@@ -58,15 +69,24 @@ def setup_database():
 
 
 def save_chats(chats, user_phone):
-    """Save a list of chats to the SQLite database for a specific user."""
+    """Save or update a list of chats to the SQLite database for a specific user."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("DELETE FROM chats WHERE user_phone = ?", (user_phone,))
+
+    # Load existing chats to avoid duplicates
+    existing_chats = {chat_id: (name, username)
+                      for chat_id, name, username in load_chats(user_phone)}
+
+    new_or_updated = 0
     for chat_id, name, username in chats:
-        c.execute("INSERT OR REPLACE INTO chats (id, name, username, user_phone) VALUES (?, ?, ?, ?)",
-                  (chat_id, name, username, user_phone))
+        # Save only new or changed chats
+        if chat_id not in existing_chats or existing_chats[chat_id] != (name, username):
+            c.execute("INSERT OR REPLACE INTO chats (id, name, username, user_phone) VALUES (?, ?, ?, ?)",
+                      (chat_id, name, username, user_phone))
+            new_or_updated += 1
     conn.commit()
     conn.close()
+    print(f"Saved or updated {new_or_updated} chats for user {user_phone}.")
 
 
 def load_chats(user_phone):
@@ -128,13 +148,12 @@ def save_messages(chat_id, messages, user_phone):
     new_messages_count = 0
 
     for sender, text, timestamp, message_id in messages:
-        # Try to insert message; if it already exists (duplicate), it will be ignored due to UNIQUE constraint
+        # Try to insert message; duplicates are ignored due to UNIQUE constraint
         try:
             c.execute("INSERT INTO messages (message_id, chat_id, sender, text, timestamp, user_phone) VALUES (?, ?, ?, ?, ?, ?)",
                       (message_id, chat_id, sender, text, timestamp.isoformat(), user_phone))
-            new_messages_count += 1  # Increment count only if a new message is inserted
+            new_messages_count += 1
         except sqlite3.IntegrityError:
-            # Message already exists (duplicate), skip it silently
             continue
 
     # Remove excess messages beyond MAX_MESSAGES_PER_CHAT
@@ -195,7 +214,7 @@ def load_messages(chat_id, filter_type, filter_value, user_phone):
     messages = [(sender, text, msg_time.replace(tzinfo=pytz.UTC) if msg_time.tzinfo is None else msg_time, message_id)
                 for sender, text, msg_time, message_id in messages]
 
-    # Check if full day is covered (only for specific_date)
+    # Check if full day is covered for specific_date filter
     if filter_type == "specific_date" and messages:
         earliest_timestamp = min(msg[2] for msg in messages)
         latest_timestamp = max(msg[2] for msg in messages)
@@ -203,7 +222,7 @@ def load_messages(chat_id, filter_type, filter_value, user_phone):
                             latest_timestamp >= specific_date.replace(hour=23, minute=59, second=59, tzinfo=pytz.UTC))
         return messages, full_day_covered, latest_timestamp
 
-    return messages, False, None  # Default return for other filter types
+    return messages, False, None
 
 
 def delete_messages_by_chat_id(chat_id, user_phone):
@@ -216,3 +235,32 @@ def delete_messages_by_chat_id(chat_id, user_phone):
     conn.close()
     print(
         f"All messages for chat ID {chat_id} and user {user_phone} deleted from database.")
+
+
+def save_last_update_timestamp(user_phone):
+    """Save the timestamp of the last chat update for a specific user."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    # Store timestamp in UTC
+    timestamp = datetime.now(pytz.UTC).isoformat()
+    c.execute("INSERT OR REPLACE INTO last_update (user_phone, last_update_timestamp) VALUES (?, ?)",
+              (user_phone, timestamp))
+    conn.commit()
+    conn.close()
+
+
+def load_last_update_timestamp(user_phone):
+    """Load the timestamp of the last chat update for a specific user as a UTC-aware datetime."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT last_update_timestamp FROM last_update WHERE user_phone = ?",
+              (user_phone,))
+    result = c.fetchone()
+    conn.close()
+    if result:
+        # Parse timestamp and ensure it's UTC-aware
+        dt = datetime.fromisoformat(result[0])
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=pytz.UTC)
+        return dt
+    return None

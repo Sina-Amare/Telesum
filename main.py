@@ -1,11 +1,10 @@
-# main.py
 import asyncio
 from config import API_ID, API_HASH
 from telegram_client import TelegramManager
 from database import (
     setup_database, save_chats, load_chats, save_search_history, load_search_history,
     save_messages, load_messages, delete_search_history_entry, delete_all_search_history,
-    delete_messages_by_chat_id
+    delete_messages_by_chat_id, save_last_update_timestamp, load_last_update_timestamp
 )
 from utils import search_by_username
 from ai_processor import summarize_text
@@ -69,52 +68,59 @@ async def main(phone):
                 break
             print("Invalid choice! Please enter a number between 1 and 6 (e.g., 1)")
 
-        if choice == "1":
-            chats = load_chats(user_phone)
-            if not chats:
-                print("No chats in database, refreshing...")
-                chats = await telegram.fetch_chats()
-                save_chats(chats, user_phone)
-            if chats:
-                print("\nYour private chats (real people only):")
-                for i, (chat_id, chat_name, _) in enumerate(chats, 1):
-                    print(f"{i}. {chat_name} (ID: {chat_id})")
-                while True:
-                    choice = input(
-                        "\nEnter the number of the chat you want to process (e.g., 1): ")
-                    try:
-                        choice = int(choice) - 1
-                        if 0 <= choice < len(chats):
-                            break
-                        print(
-                            f"Invalid choice! Please enter a number between 1 and {len(chats)} (e.g., 1)")
-                    except ValueError:
-                        print("Invalid input! Please enter a valid number (e.g., 1)")
-                chat_name, chat_id = chats[choice][1], chats[choice][0]
-                print(f"\nSelected chat: {chat_name} (ID: {chat_id})")
-                await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
-            else:
-                print("No private chats found!")
+        if choice in ["1", "2"]:
+            # Check for new chats before loading from database
+            last_update = load_last_update_timestamp(user_phone)
+            new_chats = await telegram.fetch_new_chats(last_update)
+            if new_chats:
+                save_chats(load_chats(user_phone) + new_chats, user_phone)
+                save_last_update_timestamp(user_phone)
+                print(f"Added {len(new_chats)} new chats to database.")
 
-        elif choice == "2":
-            while True:
-                username = input("Enter the username (e.g., @username): ")
-                if username.strip():
-                    break
-                print(
-                    "Username cannot be empty! Please enter a valid username (e.g., @username)")
             chats = load_chats(user_phone)
             if not chats:
                 print("No chats in database, refreshing...")
                 chats = await telegram.fetch_chats()
                 save_chats(chats, user_phone)
-            chat_name, chat_id = search_by_username(username, chats)
-            if chat_id:
-                print(f"\nFound chat: {chat_name} (ID: {chat_id})")
-                await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
-                save_search_history(username, user_phone)
-            else:
-                print(f"\nNo private chat found with {username}!")
+                save_last_update_timestamp(user_phone)
+
+            if choice == "1":
+                if chats:
+                    print("\nYour private chats (real people only):")
+                    for i, (chat_id, chat_name, _) in enumerate(chats, 1):
+                        print(f"{i}. {chat_name} (ID: {chat_id})")
+                    while True:
+                        choice = input(
+                            "\nEnter the number of the chat you want to process (e.g., 1): ")
+                        try:
+                            choice = int(choice) - 1
+                            if 0 <= choice < len(chats):
+                                break
+                            print(
+                                f"Invalid choice! Please enter a number between 1 and {len(chats)} (e.g., 1)")
+                        except ValueError:
+                            print(
+                                "Invalid input! Please enter a valid number (e.g., 1)")
+                    chat_name, chat_id = chats[choice][1], chats[choice][0]
+                    print(f"\nSelected chat: {chat_name} (ID: {chat_id})")
+                    await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
+                else:
+                    print("No private chats found!")
+
+            elif choice == "2":
+                while True:
+                    username = input("Enter the username (e.g., @username): ")
+                    if username.strip():
+                        break
+                    print(
+                        "Username cannot be empty! Please enter a valid username (e.g., @username)")
+                chat_name, chat_id = search_by_username(username, chats)
+                if chat_id:
+                    print(f"\nFound chat: {chat_name} (ID: {chat_id})")
+                    await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
+                    save_search_history(username, user_phone)
+                else:
+                    print(f"\nNo private chat found with {username}!")
 
         elif choice == "3":
             history = load_search_history(user_phone)
@@ -239,6 +245,7 @@ async def main(phone):
             print("Refreshing chat list...")
             chats = await telegram.fetch_chats()
             save_chats(chats, user_phone)
+            save_last_update_timestamp(user_phone)
             print("Chat list refreshed successfully!")
 
         elif choice == "6":
@@ -256,7 +263,6 @@ async def process_chat_messages(telegram, chat_id, chat_name, user_timezone, use
             telegram_messages = await telegram.get_messages(chat_id, filter_type, filter_value, user_timezone, user_phone)
             if telegram_messages:
                 try:
-                    # Save messages and report new ones
                     save_messages(chat_id, telegram_messages, user_phone)
                 except Exception as e:
                     print(f"Error saving messages to database: {e}")
@@ -279,13 +285,11 @@ async def process_chat_messages(telegram, chat_id, chat_name, user_timezone, use
                         messages + telegram_messages)}.values())
                     messages.sort(key=lambda x: x[2], reverse=True)
                     try:
-                        # Save messages and report new ones
                         save_messages(chat_id, telegram_messages, user_phone)
                     except Exception as e:
                         print(f"Error saving messages to database: {e}")
                 else:
                     print("No messages fetched from Telegram.")
-            # No need for additional "Loaded" message here since load_messages already reports it
 
         if messages:
             print("\nMessages:")
@@ -346,8 +350,6 @@ async def get_message_filter(telegram):
             specific_date = telegram._parse_date(date)
             if specific_date:
                 return "specific_date", date
-            # Invalid date will prompt again
-
 
 if __name__ == '__main__':
     while True:
