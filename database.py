@@ -215,7 +215,7 @@ def save_messages(db_session, chat_id, user_phone, messages, MAX_MESSAGES_PER_CH
             if not isinstance(message_id, (int, type(None))):
                 raise ValueError(f"Invalid message_id: {message_id}")
             if not isinstance(chat_id, int):
-                raise ValueError(f"Invalid chat_id: {chart_id}")
+                raise ValueError(f"Invalid chat_id: {chat_id}")
             if timestamp.tzinfo is None:
                 logger.warning(
                     f"Naive timestamp detected for message ID {message_id}, making aware")
@@ -252,19 +252,28 @@ def save_messages(db_session, chat_id, user_phone, messages, MAX_MESSAGES_PER_CH
             continue
 
     if new_messages_count > 0:
-        db_session.commit()
-        db_session.execute(text("""
-            DELETE FROM messages 
-            WHERE chat_id = :chat_id AND user_phone = :user_phone AND id NOT IN (
-                SELECT id FROM messages 
-                WHERE chat_id = :chat_id AND user_phone = :user_phone 
-                ORDER BY timestamp DESC 
-                LIMIT :limit
-            )
-        """), {"chat_id": chart_id, "user_phone": user_phone, "limit": MAX_MESSAGES_PER_CHAT})
-        db_session.commit()
-        logger.info(
-            f"Added {new_messages_count} new messages for chat ID {chat_id}")
+        try:
+            db_session.commit()
+            db_session.execute(text("""
+                DELETE FROM messages 
+                WHERE chat_id = :chat_id AND user_phone = :user_phone AND id NOT IN (
+                    SELECT id FROM messages 
+                    WHERE chat_id = :chat_id AND user_phone = :user_phone 
+                    ORDER BY timestamp DESC 
+                    LIMIT :limit
+                )
+            """), {"chat_id": chat_id, "user_phone": user_phone, "limit": MAX_MESSAGES_PER_CHAT})
+            db_session.commit()
+            logger.info(
+                f"Added {new_messages_count} new messages for chat ID {chat_id}")
+        except Exception as e:
+            db_session.rollback()
+            logger.error(
+                f"Error committing messages for chat ID {chat_id}: {e}")
+            print(
+                f"Failed to save {new_messages_count} messages for chat ID {chat_id}: {e}")
+    else:
+        logger.info(f"No new messages to save for chat ID {chat_id}")
 
     if duplicate_count > 0:
         logger.info(
