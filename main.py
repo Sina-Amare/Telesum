@@ -1,4 +1,5 @@
 # main.py
+from gui import run_gui
 import asyncio
 from config import API_ID, API_HASH
 from telegram_client import TelegramManager
@@ -409,16 +410,19 @@ async def get_message_filter(telegram):
             if specific_date:
                 return "specific_date", date
 
+# if __name__ == '__main__':
+#     while True:
+#         phone = input(
+#             "Enter phone number (e.g., +989123456789): ")
+#         if phone.strip() and phone.startswith("+") and phone[1:].isdigit():
+#             break
+#         print("Invalid phone number. Please use format: +989123456789")
+#     try:
+#         asyncio.run(main(phone))
+#     except KeyboardInterrupt:
+#         print("\nProgram terminated by user.")
+#     except Exception as e:
+#         print(f"An error occurred: {e}")
+
 if __name__ == '__main__':
-    while True:
-        phone = input(
-            "Enter phone number (e.g., +989123456789): ")
-        if phone.strip() and phone.startswith("+") and phone[1:].isdigit():
-            break
-        print("Invalid phone number. Please use format: +989123456789")
-    try:
-        asyncio.run(main(phone))
-    except KeyboardInterrupt:
-        print("\nProgram terminated by user.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    run_gui()

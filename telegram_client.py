@@ -1,15 +1,16 @@
-from telethon import TelegramClient
-from telethon.errors import FloodWaitError
-from telethon.tl.types import User
 import asyncio
 import os
 from datetime import datetime, timedelta
 import pytz
+from telethon import TelegramClient
+from telethon.errors import FloodWaitError
+from telethon.tl.types import User
 from utils import get_sender_name, get_message_content
 from database import save_messages, load_messages
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from config import DATABASE_URL, VERBOSE_LOGGING
+from PyQt6.QtWidgets import QInputDialog
 import logging
 
 # Set up logging
@@ -29,20 +30,19 @@ os.makedirs(SESSION_DIR, exist_ok=True)
 class TelegramManager:
     """Manages Telegram client operations such as connection, login, and message fetching."""
 
-    def __init__(self, session_name, api_id, api_hash):
+    def __init__(self, session_name, api_id, api_hash, parent=None):
         """Initialize the Telegram client."""
         session_path = os.path.join(SESSION_DIR, f"{session_name}.session")
         self.client = TelegramClient(session_path, api_id, api_hash)
         self.me = None  # To store current user info
+        self.parent = parent  # Reference to parent widget for GUI dialogs
 
     async def connect(self):
         """Establish a connection to Telegram servers."""
         try:
             await self.client.connect()
-            print("Connected to Telegram servers.")
             logger.info("Connected to Telegram servers")
         except Exception as e:
-            print(f"Error connecting to Telegram: {e}")
             logger.error(f"Error connecting to Telegram: {e}")
             raise
 
@@ -50,41 +50,44 @@ class TelegramManager:
         """Log in to Telegram using the provided phone number."""
         try:
             if not await self.client.is_user_authorized():
-                print("First-time login required.")
-                await self.client.start(phone=phone)
-                print("Successfully logged in and session saved!")
-                logger.info("Successfully logged in and session saved")
-            else:
-                print("Already logged in using saved session.")
-                logger.info("Already logged in using saved session")
+                await self.client.send_code_request(phone)
+                if self.parent:
+                    code, ok = QInputDialog.getText(
+                        self.parent, "Telegram Login", "Enter the code sent to your Telegram:")
+                    if not ok or not code:
+                        raise ValueError("Login cancelled or no code provided")
+                else:
+                    # Fallback for non-GUI use
+                    code = input("Enter the code sent to your Telegram: ")
+                await self.client.sign_in(phone, code)
             self.me = await self.client.get_me()
+            logger.info("Logged in and session saved")
             return self.me
         except Exception as e:
-            print(f"Error logging into Telegram: {e}")
             logger.error(f"Error logging into Telegram: {e}")
             raise
 
     async def fetch_chats(self):
-        """Retrieve all private chats from Telegram."""
-        print("Loading chat list...")
         logger.info("Loading chat list")
         chats = []
         try:
             async for dialog in self.client.iter_dialogs():
+                logger.debug(
+                    f"Processing dialog: {dialog.name}, is_user={dialog.is_user}, entity_type={type(dialog.entity)}")
                 if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
                     chats.append(
                         (dialog.id, dialog.name, dialog.entity.username))
+                    logger.debug(
+                        f"Added chat: {dialog.name} (ID: {dialog.id})")
                     await asyncio.sleep(0.5)  # Delay to respect API limits
-            logger.info(f"Retrieved {len(chats)} private chats")
+            logger.info(f"Retrieved {len(chats)} private chats from Telegram")
             return chats
         except Exception as e:
-            print(f"Error loading chats: {e}")
             logger.error(f"Error loading chats: {e}")
             return []
 
     async def fetch_new_chats(self, last_update_timestamp=None):
         """Retrieve only new or updated private chats since the last update."""
-        print("Checking for new or updated chats...")
         logger.info("Checking for new or updated chats")
         new_chats = []
         try:
@@ -101,18 +104,11 @@ class TelegramManager:
                             (dialog.id, dialog.name, dialog.entity.username))
                     await asyncio.sleep(0.5)  # Delay to respect API limits
             if new_chats:
-                print("New or updated chats found:")
-                for chat_id, name, username in new_chats:
-                    username_str = f" (@{username})" if username else ""
-                    print(f"- {name}{username_str} (ID: {chat_id})")
                 logger.info(f"Found {len(new_chats)} new or updated chats")
             else:
-                print("No new or updated chats found.")
                 logger.info("No new or updated chats found")
-            print(f"Total new or updated chats: {len(new_chats)}")
             return new_chats
         except Exception as e:
-            print(f"Error checking new chats: {e}")
             logger.error(f"Error checking new chats: {e}")
             return []
 
@@ -133,7 +129,6 @@ class TelegramManager:
                     yield msg
                 break
             except FloodWaitError as e:
-                print(f"Rate limit hit! Waiting {e.seconds} seconds...")
                 logger.warning(f"Rate limit hit, waiting {e.seconds} seconds")
                 await asyncio.sleep(e.seconds)
             except Exception as e:
@@ -155,8 +150,6 @@ class TelegramManager:
                     f"Found {db_message_count} messages in database for chat ID {chat_id}, no Telegram fetch needed")
                 return db_messages[:filter_value]
             messages_to_fetch = filter_value - db_message_count
-            print(
-                f"Found {db_message_count} messages in database, fetching {messages_to_fetch} more from Telegram...")
             logger.info(
                 f"Found {db_message_count} messages in database, fetching {messages_to_fetch} more for chat ID {chat_id}")
         elif filter_type == "specific_date" and db_messages and full_day_covered:
@@ -164,7 +157,6 @@ class TelegramManager:
                 f"Database has complete messages for {filter_value} for chat ID {chat_id}")
             return db_messages
         else:
-            print(f"Fetching messages from Telegram for chat ID {chat_id}...")
             logger.info(
                 f"Fetching messages from Telegram for chat ID {chat_id}")
 
@@ -252,7 +244,6 @@ class TelegramManager:
                         break
 
         except Exception as e:
-            print(f"Error fetching messages from Telegram: {e}")
             logger.error(f"Error fetching messages from Telegram: {e}")
             return None
 
@@ -280,14 +271,12 @@ class TelegramManager:
                 db_session.commit()
             except Exception as e:
                 db_session.rollback()
-                print(f"Error saving messages to database: {e}")
                 logger.error(f"Error saving messages to database: {e}")
                 return messages
             finally:
                 db_session.close()
 
         if not messages:
-            print(f"No new messages found for chat ID {chat_id}")
             logger.info(f"No new messages found for chat ID {chat_id}")
 
         logger.info(
@@ -299,8 +288,6 @@ class TelegramManager:
         try:
             return self._make_aware_datetime(datetime.strptime(date_str, "%d %B %Y"))
         except ValueError:
-            print(
-                "Invalid date format! Please use 'DD Month YYYY' (e.g., '10 March 2025')")
             logger.error(f"Invalid date format: {date_str}")
             return None
 
@@ -314,8 +301,6 @@ class TelegramManager:
         """Disconnect from Telegram servers."""
         try:
             await self.client.disconnect()
-            print("Disconnected from Telegram.")
             logger.info("Disconnected from Telegram")
         except Exception as e:
-            print(f"Error disconnecting: {e}")
             logger.error(f"Error disconnecting: {e}")

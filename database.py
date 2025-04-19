@@ -80,13 +80,15 @@ def setup_database():
 
 
 def save_chats(chats, user_phone):
-    """Save or update a list of chats to the database for a specific user."""
     session = Session()
     try:
         existing_chats = {chat.id: (chat.name, chat.username) for chat in session.query(
             Chat).filter_by(user_phone=user_phone).all()}
+        logger.debug(f"Existing chats for {user_phone}: {existing_chats}")
         new_or_updated = 0
         for chat_id, name, username in chats:
+            logger.debug(
+                f"Saving chat: ID={chat_id}, name={name}, username={username}")
             if chat_id not in existing_chats or existing_chats[chat_id] != (name, username):
                 session.merge(Chat(id=chat_id, name=name,
                               username=username, user_phone=user_phone))
@@ -96,6 +98,8 @@ def save_chats(chats, user_phone):
             print(f"Updated {new_or_updated} chats for user {user_phone}.")
             logger.info(
                 f"Updated {new_or_updated} chats for user {user_phone}")
+        else:
+            logger.info(f"No new chats to update for user {user_phone}")
     except Exception as e:
         session.rollback()
         print(f"Error saving chats: {e}")
@@ -105,11 +109,13 @@ def save_chats(chats, user_phone):
 
 
 def load_chats(user_phone):
-    """Load all chats from the database for a specific user."""
     session = Session()
     try:
-        chats = [(chat.id, chat.name, chat.username) for chat in session.query(
-            Chat).filter_by(user_phone=user_phone).all()]
+        # Debug: Print raw query results
+        raw_chats = session.query(Chat).filter_by(user_phone=user_phone).all()
+        print(
+            f"Raw chats from database for {user_phone}: {[(chat.id, chat.name, chat.username) for chat in raw_chats]}")
+        chats = [(chat.id, chat.name, chat.username) for chat in raw_chats]
         logger.info(f"Loaded {len(chats)} chats for user {user_phone}")
         return chats
     except Exception as e:

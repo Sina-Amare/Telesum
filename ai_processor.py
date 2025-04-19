@@ -38,8 +38,8 @@ def summarize_text(messages):
     payload = {
         "model": "deepseek/deepseek-chat",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 300,
-        "temperature": 0.7,
+        "max_tokens": 500,
+        "temperature": 0.6,
     }
 
     try:

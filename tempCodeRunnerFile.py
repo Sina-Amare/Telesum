@@ -1,12 +1,12 @@
 # main.py
+from gui import run_gui
 import asyncio
 from config import API_ID, API_HASH
 from telegram_client import TelegramManager
 from database import (
     setup_database, save_chats, load_chats, save_search_history, load_search_history,
     load_messages, delete_search_history_entry, delete_all_search_history,
-    delete_messages_by_chat_id, save_last_update_timestamp, load_last_update_timestamp,
-    delete_recent_messages, delete_messages_from_date
+    delete_messages, save_last_update_timestamp, load_last_update_timestamp
 )
 from utils import search_by_username
 from ai_processor import summarize_text
@@ -245,8 +245,8 @@ async def main(phone):
                             confirmation = input(
                                 f"Confirm deletion of the last {count} messages for {chat_name}? (yes/no): ").lower()
                             if confirmation == "yes":
-                                deleted_count = delete_recent_messages(
-                                    chat_id, user_phone, count)
+                                deleted_count = delete_messages(
+                                    chat_id, user_phone, num_messages=count)
                                 if deleted_count > 0:
                                     print(
                                         f"Deleted {deleted_count} recent messages for {chat_name}.")
@@ -267,16 +267,16 @@ async def main(phone):
                                     print(
                                         "Invalid date format. Use 'DD Month YYYY' (e.g., '10 March 2025').")
                             confirmation = input(
-                                f"Confirm deletion of messages from {date_str} onwards for {chat_name}? (yes/no): ").lower()
+                                f"Confirm deletion of messages from {date_str} for {chat_name}? (yes/no): ").lower()
                             if confirmation == "yes":
-                                deleted_count = delete_messages_from_date(
-                                    chat_id, user_phone, date_str)
+                                deleted_count = delete_messages(
+                                    chat_id, user_phone, specific_date=date_str)
                                 if deleted_count > 0:
                                     print(
-                                        f"Deleted {deleted_count} messages from {date_str} onwards for {chat_name}.")
+                                        f"Deleted {deleted_count} messages from {date_str} for {chat_name}.")
                                 else:
                                     print(
-                                        f"No messages found from {date_str} onwards for {chat_name}.")
+                                        f"No messages found from {date_str} for {chat_name}.")
                             else:
                                 print("Deletion canceled.")
 
@@ -284,7 +284,7 @@ async def main(phone):
                             confirmation = input(
                                 f"Confirm deletion of all messages for {chat_name}? (yes/no): ").lower()
                             if confirmation == "yes":
-                                deleted_count = delete_messages_by_chat_id(
+                                deleted_count = delete_messages(
                                     chat_id, user_phone)
                                 if deleted_count > 0:
                                     print(
@@ -410,16 +410,19 @@ async def get_message_filter(telegram):
             if specific_date:
                 return "specific_date", date
 
+# if __name__ == '__main__':
+#     while True:
+#         phone = input(
+#             "Enter phone number (e.g., +989123456789): ")
+#         if phone.strip() and phone.startswith("+") and phone[1:].isdigit():
+#             break
+#         print("Invalid phone number. Please use format: +989123456789")
+#     try:
+#         asyncio.run(main(phone))
+#     except KeyboardInterrupt:
+#         print("\nProgram terminated by user.")
+#     except Exception as e:
+#         print(f"An error occurred: {e}")
+
 if __name__ == '__main__':
-    while True:
-        phone = input(
-            "Enter phone number (e.g., +989123456789): ")
-        if phone.strip() and phone.startswith("+") and phone[1:].isdigit():
-            break
-        print("Invalid phone number. Please use format: +989123456789")
-    try:
-        asyncio.run(main(phone))
-    except KeyboardInterrupt:
-        print("\nProgram terminated by user.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    run_gui()
