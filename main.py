@@ -101,8 +101,9 @@ async def main(phone):
                             print("Invalid input. Please enter a number.")
                     chat_name, chat_id, username = chats[choice][1], chats[choice][0], chats[choice][2]
                     print(f"\nSelected chat: {chat_name} (ID: {chat_id})")
-                    if username:
-                        save_search_history(username, user_phone)
+                    # Save to search history using username if available, otherwise use chat name
+                    search_term = username if username else chat_name
+                    save_search_history(search_term, user_phone)
                     await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
                 else:
                     print("No private chats available.")
@@ -116,8 +117,8 @@ async def main(phone):
                 chat_name, chat_id = search_by_username(username, chats)
                 if chat_id:
                     print(f"\nFound chat: {chat_name} (ID: {chat_id})")
-                    await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
                     save_search_history(username, user_phone)
+                    await process_chat_messages(telegram, chat_id, chat_name, user_timezone, user_phone)
                 else:
                     print(f"No private chat found for {username}.")
 

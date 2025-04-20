@@ -58,7 +58,6 @@ class TelegramManager:
                     if not ok or not code:
                         raise ValueError("Login cancelled or no code provided")
                 else:
-                    # Fallback for non-GUI use
                     code = input("Enter the code sent to your Telegram: ")
                 await self.client.sign_in(phone, code)
             self.me = await self.client.get_me()
@@ -71,11 +70,9 @@ class TelegramManager:
     async def toggle_updates(self, enable=True):
         """Enable or disable background updates."""
         if enable and not self.updates_enabled:
-            # Re-enable updates
             self.updates_enabled = True
             logger.info("Background updates enabled.")
         elif not enable and self.updates_enabled:
-            # Disable updates
             self.updates_enabled = False
             logger.info("Background updates disabled.")
 
@@ -84,7 +81,6 @@ class TelegramManager:
         logger.info("Loading chat list")
         chats = []
         try:
-            # Disable background updates during fetch
             await self.toggle_updates(False)
             async for dialog in self.client.iter_dialogs():
                 logger.debug(
@@ -100,21 +96,18 @@ class TelegramManager:
             wait_time = e.seconds
             logger.warning(f"FloodWaitError: Waiting for {wait_time} seconds.")
             await asyncio.sleep(wait_time)
-            # Retry after waiting
             return await self.fetch_chats()
         except Exception as e:
             logger.error(f"Error loading chats: {e}")
             return []
         finally:
-            # Re-enable updates after fetch
             await self.toggle_updates(True)
 
     async def fetch_new_chats(self, last_update_timestamp=None):
-        """Retrieve only new or updated private chats since the last update with adaptive rate limiting."""
+        """Retrieve only new or updated private chats since the last update."""
         logger.info("Checking for new or updated chats")
         new_chats = []
         try:
-            # Disable background updates during fetch
             await self.toggle_updates(False)
             async for dialog in self.client.iter_dialogs():
                 if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
@@ -138,30 +131,28 @@ class TelegramManager:
             wait_time = e.seconds
             logger.warning(f"FloodWaitError: Waiting for {wait_time} seconds.")
             await asyncio.sleep(wait_time)
-            # Retry after waiting
             return await self.fetch_new_chats(last_update_timestamp)
         except Exception as e:
             logger.error(f"Error checking new chats: {e}")
             return []
         finally:
-            # Re-enable updates after fetch
             await self.toggle_updates(True)
 
-    async def safe_iter_messages(self, chat_id, limit=None, offset_id=0, offset_date=None):
+    async def safe_iter_messages(self, chat_id, limit=None, offset_id=0, offset_date=None, reverse=False):
         """Safely iterate over messages with adaptive rate limiting."""
         while True:
             try:
-                async for msg in self.client.iter_messages(chat_id, limit=limit, offset_id=offset_id, offset_date=offset_date):
+                async for msg in self.client.iter_messages(chat_id, limit=limit, offset_id=offset_id, offset_date=offset_date, reverse=reverse):
                     if msg.date:
                         if msg.date.tzinfo is None:
                             logger.debug(
                                 f"Naive msg.date detected for message ID {msg.id}, making aware")
                             msg.date = msg.date.replace(tzinfo=pytz.UTC)
+                        yield msg
                     else:
                         logger.warning(
                             f"Message ID {msg.id} has no date, skipping")
                         continue
-                    yield msg
                 break
             except FloodWaitError as e:
                 wait_time = e.seconds
@@ -171,81 +162,44 @@ class TelegramManager:
                 logger.error(f"Error in safe_iter_messages: {e}")
                 raise
 
-    async def get_messages(self, chat_id, filter_type, filter_value, user_timezone, user_phone):
+    async def get_messages(self, chat_id, filter_type, filter_value, user_timezone, user_phone, progress_callback=None):
         """Fetch messages from a chat based on the specified filter and user timezone."""
-        # Check database for existing messages
-        db_messages, full_day_covered, _ = load_messages(
-            chat_id, filter_type, filter_value, user_phone)
+        # Load existing messages from database
+        db_messages, full_day_covered, latest_timestamp = load_messages(
+            chat_id, filter_type, filter_value, user_phone, user_timezone)
         messages = []
-        messages_to_fetch = filter_value
-
-        if filter_type == "recent_messages" and db_messages:
-            db_message_count = len(db_messages)
-            if db_message_count >= filter_value:
-                logger.info(
-                    f"Found {db_message_count} messages in database for chat ID {chat_id}, no Telegram fetch needed")
-                return db_messages[:filter_value]
-            messages_to_fetch = filter_value - db_message_count
-            logger.info(
-                f"Found {db_message_count} messages in database, fetching {messages_to_fetch} more for chat ID {chat_id}")
-        elif filter_type == "specific_date" and db_messages and full_day_covered:
-            logger.info(
-                f"Database has complete messages for {filter_value} for chat ID {chat_id}")
-            return db_messages
-        else:
-            logger.info(
-                f"Fetching messages from Telegram for chat ID {chat_id}")
+        total_fetched = 0
 
         try:
-            # Disable background updates during fetch
             await self.toggle_updates(False)
+            batch_size = 50  # Fetch messages in batches
+
             if filter_type == "recent_messages":
-                # Use the smallest message_id from db_messages as offset_id
+                messages_to_fetch = filter_value
                 offset_id = 0
-                if db_messages:
-                    offset_id = min(msg[3] for msg in db_messages)
-                    logger.debug(
-                        f"Using offset_id {offset_id} for chat ID {chat_id}")
 
-                async for message in self.safe_iter_messages(chat_id, limit=messages_to_fetch, offset_id=offset_id):
-                    sender = await message.get_sender()
-                    sender_name = get_sender_name(sender, self.me)
-                    message_content = get_message_content(message)
-                    message_date = message.date
-                    messages.append(
-                        (sender_name, message_content, message_date, message.id))
-                    logger.debug(
-                        f"Fetched message ID {message.id} for chat ID {chat_id}")
-
-            elif filter_type == "recent_days":
-                min_date = self._make_aware_datetime(
-                    datetime.now() - timedelta(days=filter_value))
-                message_count = 0
-                last_id = 0
-                oldest_date = None
-                while True:
+                # Fetch messages from Telegram
+                while total_fetched < messages_to_fetch:
                     batch = []
-                    last_message_date = None
-                    async for message in self.safe_iter_messages(chat_id, limit=5000, offset_id=last_id):
-                        message_count += 1
-                        last_message_date = message.date
-                        if not oldest_date or (last_message_date and last_message_date < oldest_date):
-                            oldest_date = last_message_date
-                        if last_message_date and last_message_date >= min_date:
-                            sender = await message.get_sender()
-                            sender_name = get_sender_name(sender, self.me)
-                            message_content = get_message_content(message)
-                            batch.append(
-                                (sender_name, message_content, last_message_date, message.id))
-                            logger.debug(
-                                f"Fetched message ID {message.id} for chat ID {chat_id}")
-                        last_id = message.id
-                    if batch:
-                        messages.extend(batch)
-                    if last_message_date and last_message_date < min_date:
-                        break
+                    limit = min(batch_size, messages_to_fetch - total_fetched)
+                    async for message in self.safe_iter_messages(chat_id, limit=limit, offset_id=offset_id):
+                        sender = await message.get_sender()
+                        sender_name = get_sender_name(sender, self.me)
+                        message_content = get_message_content(message)
+                        message_date = message.date
+                        batch.append(
+                            (sender_name, message_content, message_date, message.id))
                     if not batch:
                         break
+                    messages.extend(batch)
+                    total_fetched += len(batch)
+                    if batch:
+                        offset_id = batch[-1][3]
+                    # Update progress
+                    if progress_callback:
+                        progress = (total_fetched / messages_to_fetch) * 100
+                        progress = min(progress, 100)
+                        await progress_callback(progress)
 
             elif filter_type == "specific_date":
                 specific_date = datetime.strptime(filter_value, '%d %B %Y')
@@ -255,71 +209,97 @@ class TelegramManager:
                 min_date = local_start.astimezone(pytz.UTC)
                 max_date = local_end.astimezone(pytz.UTC)
 
-                message_count = 0
-                last_id = 0
+                # If database has the full day covered, return those messages
+                if full_day_covered:
+                    return db_messages
+
+                # Fetch messages from Telegram within the date range
+                offset_id = 0
                 while True:
                     batch = []
-                    async for message in self.safe_iter_messages(chat_id, limit=100, offset_id=last_id):
-                        message_count += 1
+                    async for message in self.safe_iter_messages(chat_id, limit=batch_size, offset_id=offset_id):
                         message_date = message.date
-                        if message_date and message_date < min_date:
+                        if message_date < min_date:
                             break
-                        if message_date and min_date <= message_date <= max_date:
+                        if min_date <= message_date <= max_date:
                             sender = await message.get_sender()
                             sender_name = get_sender_name(sender, self.me)
                             message_content = get_message_content(message)
                             batch.append(
                                 (sender_name, message_content, message_date, message.id))
-                            logger.debug(
-                                f"Fetched message ID {message.id} for chat ID {chat_id}")
-                        last_id = message.id
-                    if batch:
-                        messages.extend(batch)
-                    if not batch or message_count >= 1000:
+                        offset_id = message.id
+                    if not batch:
                         break
+                    messages.extend(batch)
+                    total_fetched += len(batch)
+                    # Update progress (approximate, since we don't know total)
+                    if progress_callback:
+                        # Approximate progress
+                        await progress_callback(min(total_fetched * 2, 100))
+
+            elif filter_type == "recent_days":
+                min_date = datetime.now(user_timezone) - \
+                    timedelta(days=filter_value)
+                min_date = min_date.astimezone(pytz.UTC)
+                offset_id = 0
+                while True:
+                    batch = []
+                    async for message in self.safe_iter_messages(chat_id, limit=batch_size, offset_id=offset_id):
+                        message_date = message.date
+                        if message_date < min_date:
+                            break
+                        sender = await message.get_sender()
+                        sender_name = get_sender_name(sender, self.me)
+                        message_content = get_message_content(message)
+                        batch.append(
+                            (sender_name, message_content, message_date, message.id))
+                        offset_id = message.id
+                    if not batch:
+                        break
+                    messages.extend(batch)
+                    total_fetched += len(batch)
+                    # Update progress (approximate)
+                    if progress_callback:
+                        # Approximate progress
+                        await progress_callback(min(total_fetched * 2, 100))
+
+            # Combine with database messages
+            combined_messages = db_messages + messages
+            combined_messages = list(
+                {msg[3]: msg for msg in combined_messages}.values())
+            combined_messages.sort(key=lambda x: x[2], reverse=True)
+
+            # Filter messages based on the filter type
+            if filter_type == "recent_messages":
+                messages = combined_messages[:filter_value]
+            elif filter_type == "recent_days":
+                messages = [
+                    msg for msg in combined_messages if msg[2] >= min_date]
+            else:  # specific_date
+                messages = [
+                    msg for msg in combined_messages if min_date <= msg[2] <= max_date]
+
+            # Save to database
+            if messages:
+                engine = create_engine(DATABASE_URL)
+                Session = sessionmaker(bind=engine)
+                db_session = Session()
+                try:
+                    save_messages(db_session, chat_id, user_phone, messages)
+                    db_session.commit()
+                except Exception as e:
+                    db_session.rollback()
+                    logger.error(f"Error saving messages to database: {e}")
+                finally:
+                    db_session.close()
+
+            return messages
 
         except Exception as e:
             logger.error(f"Error fetching messages from Telegram: {e}")
-            return None
+            return []
         finally:
-            # Re-enable updates after fetch
             await self.toggle_updates(True)
-
-        # Ensure all timestamps are timezone-aware before combining
-        combined_messages = []
-        for msg in db_messages + messages:
-            sender, text, timestamp, msg_id = msg
-            if timestamp.tzinfo is None:
-                logger.warning(
-                    f"Naive timestamp in message ID {msg_id}, making aware")
-                timestamp = timestamp.replace(tzinfo=pytz.UTC)
-            combined_messages.append((sender, text, timestamp, msg_id))
-
-        # Combine database and Telegram messages, removing duplicates
-        if combined_messages:
-            messages = list(
-                {msg[3]: msg for msg in combined_messages}.values())
-            messages.sort(key=lambda x: x[2], reverse=True)
-            # Save fetched messages to database
-            engine = create_engine(DATABASE_URL)
-            Session = sessionmaker(bind=engine)
-            db_session = Session()
-            try:
-                save_messages(db_session, chat_id, user_phone, messages)
-                db_session.commit()
-            except Exception as e:
-                db_session.rollback()
-                logger.error(f"Error saving messages to database: {e}")
-                return messages
-            finally:
-                db_session.close()
-
-        if not messages:
-            logger.info(f"No new messages found for chat ID {chat_id}")
-
-        logger.info(
-            f"Returning {len(messages)} messages for chat ID {chat_id}")
-        return messages
 
     def _parse_date(self, date_str):
         """Parse a date string into a datetime object."""

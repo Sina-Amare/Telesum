@@ -5,6 +5,9 @@ def search_by_username(username, chats):
     for chat_id, chat_name, chat_username in chats:
         if chat_username and chat_username.lower() == username:
             return chat_name, chat_id
+        # Also check if the username matches the chat name (for cases where username is not set)
+        if chat_name.lower() == username:
+            return chat_name, chat_id
     return None, None
 
 

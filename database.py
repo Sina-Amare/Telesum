@@ -111,7 +111,6 @@ def save_chats(chats, user_phone):
 def load_chats(user_phone):
     session = Session()
     try:
-        # Debug: Print raw query results
         raw_chats = session.query(Chat).filter_by(user_phone=user_phone).all()
         print(
             f"Raw chats from database for {user_phone}: {[(chat.id, chat.name, chat.username) for chat in raw_chats]}")
@@ -193,7 +192,7 @@ def delete_all_search_history(user_phone):
         session.close()
 
 
-def save_messages(db_session, chat_id, user_phone, messages, MAX_MESSAGES_PER_CHAT=5000):
+def save_messages(db_session, chat_id, user_phone, messages, max_messages_per_chat=MAX_MESSAGES_PER_CHAT):
     """Save messages to the database, skipping duplicates efficiently."""
     # Fetch existing message IDs for the chat and user
     existing_message_ids = set(
@@ -260,6 +259,7 @@ def save_messages(db_session, chat_id, user_phone, messages, MAX_MESSAGES_PER_CH
     if new_messages_count > 0:
         try:
             db_session.commit()
+            # Remove excess messages beyond the limit
             db_session.execute(text("""
                 DELETE FROM messages 
                 WHERE chat_id = :chat_id AND user_phone = :user_phone AND id NOT IN (
@@ -268,7 +268,7 @@ def save_messages(db_session, chat_id, user_phone, messages, MAX_MESSAGES_PER_CH
                     ORDER BY timestamp DESC 
                     LIMIT :limit
                 )
-            """), {"chat_id": chat_id, "user_phone": user_phone, "limit": MAX_MESSAGES_PER_CHAT})
+            """), {"chat_id": chat_id, "user_phone": user_phone, "limit": max_messages_per_chat})
             db_session.commit()
             logger.info(
                 f"Added {new_messages_count} new messages for chat ID {chat_id}")
@@ -289,8 +289,8 @@ def save_messages(db_session, chat_id, user_phone, messages, MAX_MESSAGES_PER_CH
     return new_messages_count
 
 
-def load_messages(chat_id, filter_type, filter_value, user_phone):
-    """Load messages from the database based on a filter for a specific user."""
+def load_messages(chat_id, filter_type, filter_value, user_phone, user_timezone=None):
+    """Load messages from the database based on a filter for a specific user, adjusted for timezone."""
     session = Session()
     try:
         query = session.query(Message).filter_by(
@@ -300,15 +300,23 @@ def load_messages(chat_id, filter_type, filter_value, user_phone):
             query = query.order_by(
                 Message.timestamp.desc()).limit(filter_value)
         elif filter_type == "recent_days":
-            min_date = datetime.now(pytz.UTC) - timedelta(days=filter_value)
+            min_date = datetime.now(
+                user_timezone if user_timezone else pytz.UTC) - timedelta(days=filter_value)
+            min_date = min_date.astimezone(pytz.UTC)
             query = query.filter(Message.timestamp >= min_date).order_by(
                 Message.timestamp.desc())
         elif filter_type == "specific_date":
             specific_date = datetime.strptime(filter_value, "%d %B %Y")
-            specific_date = specific_date.replace(
-                hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC)
-            min_date = specific_date
-            max_date = min_date + timedelta(days=1) - timedelta(seconds=1)
+            if user_timezone:
+                local_start = user_timezone.localize(
+                    specific_date.replace(hour=0, minute=0, second=0))
+                local_end = local_start.replace(hour=23, minute=59, second=59)
+                min_date = local_start.astimezone(pytz.UTC)
+                max_date = local_end.astimezone(pytz.UTC)
+            else:
+                min_date = specific_date.replace(
+                    hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC)
+                max_date = min_date + timedelta(days=1) - timedelta(seconds=1)
             query = query.filter(Message.timestamp.between(
                 min_date, max_date)).order_by(Message.timestamp.desc())
 
@@ -323,14 +331,24 @@ def load_messages(chat_id, filter_type, filter_value, user_phone):
 
         full_day_covered = False
         latest_timestamp = None
-        if filter_type == "specific_date" and messages:
-            earliest_timestamp = min(msg[2] for msg in messages)
+        if messages:
             latest_timestamp = max(msg[2] for msg in messages)
-            full_day_covered = (
-                earliest_timestamp <= specific_date and
-                latest_timestamp >= specific_date.replace(
-                    hour=23, minute=59, second=59, tzinfo=pytz.UTC)
-            )
+
+        if filter_type == "specific_date" and messages:
+            timestamps = [msg[2] for msg in messages]
+            timestamps.sort()
+            full_day_covered = True
+            current_time = min_date
+            end_time = max_date
+            i = 0
+            while current_time <= end_time and i < len(timestamps):
+                if timestamps[i] < current_time:
+                    i += 1
+                    continue
+                if timestamps[i] > current_time + timedelta(hours=1):
+                    full_day_covered = False
+                    break
+                current_time += timedelta(hours=1)
 
         logger.info(
             f"Loaded {len(messages)} messages for chat ID {chat_id}, filter: {filter_type}")
