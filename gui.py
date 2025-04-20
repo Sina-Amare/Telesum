@@ -95,20 +95,24 @@ class FetchMessagesDialog(QDialog):
         self.result = None
         self.setWindowTitle(f"Fetch Messages for {chat_name}")
         self.setMinimumSize(500, 250)
+        self.setStyleSheet("background-color: #2E2E2E; color: #ECEFF1;")
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
 
         filter_frame = QFrame()
         filter_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
+        filter_frame.setStyleSheet(
+            "background-color: #484848; border: none; border-radius: 8px; padding: 15px;")
         filter_layout = QGridLayout()
-        filter_layout.setSpacing(10)
+        filter_layout.setSpacing(15)
 
         filter_label = QLabel("Message Filter:")
-        filter_label.setStyleSheet("font-weight: bold; color: #333333;")
+        filter_label.setStyleSheet(
+            "font-weight: 500; font-size: 12pt; color: #E0E0E0; font-family: 'Roboto';")
         self.filter_combo = QComboBox()
         self.filter_combo.addItems([
             "Recent messages (e.g., last 10 messages)",
@@ -116,19 +120,111 @@ class FetchMessagesDialog(QDialog):
             "Messages from a specific date (e.g., 10 March 2025)"
         ])
         self.filter_combo.setMinimumWidth(300)
+        self.filter_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 8px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QComboBox:hover {
+                background-color: #3A3A3A;
+                border: 1px solid #666666;
+            }
+            QComboBox::drop-down {
+                width: 24px;
+                border: none;
+                background: transparent;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                width: 12px;
+                height: 12px;
+                margin-right: 8px;
+                border-left: 6px solid transparent;
+                border-right: 6px solid transparent;
+                border-top: 6px solid #E0E0E0;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #333333;
+                color: #E0E0E0;
+                selection-background-color: #26A69A;
+                selection-color: #FFFFFF;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 4px;
+            }
+        """)
 
         self.value_input = QLineEdit()
         self.value_input.setPlaceholderText("e.g., 10, 7, 10 March 2025")
         self.value_input.setMinimumWidth(200)
+        self.value_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 8px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QLineEdit:focus {
+                border: 1px solid #26A69A;
+                background-color: #3A3A3A;
+            }
+        """)
 
-        self.fetch_button = QPushButton("Fetch Messages")
+        self.fetch_button = QPushButton("📥 Fetch Messages")
         self.fetch_button.clicked.connect(self.fetch_messages)
-        self.fetch_button.setStyleSheet(
-            "background-color: #4CAF50; color: white;")
+        self.fetch_button.setStyleSheet("""
+            QPushButton {
+                background-color: #26A69A;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #4DB6AC;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #00897B;
+                transform: scale(0.98);
+            }
+        """)
 
-        cancel_button = QPushButton("Cancel")
+        cancel_button = QPushButton("❌ Cancel")
         cancel_button.clicked.connect(self.reject)
-        cancel_button.setStyleSheet("background-color: #F44336; color: white;")
+        cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: #EF5350;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #F44336;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #D32F2F;
+                transform: scale(0.98);
+            }
+        """)
 
         filter_layout.addWidget(filter_label, 0, 0)
         filter_layout.addWidget(self.filter_combo, 0, 1)
@@ -183,7 +279,8 @@ class MainWindow(QMainWindow):
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.setWindowTitle("TeleSam - Telegram Chat Manager")
         self.setMinimumSize(900, 600)
-        self.setStyleSheet("background-color: #F5F5F5;")
+        self.setStyleSheet(
+            "background-color: #2E2E2E; color: #ECEFF1; font-family: 'Roboto';")
         self.telegram = None
         self.user_phone = None
         self.user_timezone = None
@@ -196,6 +293,33 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                background-color: #2E2E2E;
+                border: none;
+            }
+            QTabBar::tab {
+                background-color: #383838;
+                color: #E0E0E0;
+                padding: 12px 24px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+            }
+            QTabBar::tab:selected {
+                background-color: #484848;
+                border-bottom: 3px solid #26A69A;
+                color: #FFFFFF;
+            }
+            QTabBar::tab:!selected {
+                background-color: #383838;
+            }
+            QTabBar::tab:hover {
+                background-color: #424242;
+            }
+        """)
         self.setCentralWidget(self.tabs)
 
         self.login_tab = QWidget()
@@ -226,30 +350,59 @@ class MainWindow(QMainWindow):
         self.setup_logs_tab()
         self.tabs.addTab(self.logs_tab, "Logs")
 
+        self.statusBar().setStyleSheet(
+            "background-color: #383838; color: #B0BEC5; font-family: 'Roboto'; font-size: 10pt; padding: 4px;")
         self.statusBar().showMessage("Ready")
 
     def setup_login_tab(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
 
+        # Phone Number Section
         phone_frame = QFrame()
         phone_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
+        phone_frame.setStyleSheet(
+            "background-color: #484848; border: none; border-radius: 8px; padding: 15px;")
         phone_layout = QHBoxLayout()
+        phone_layout.setSpacing(15)
         phone_label = QLabel("Phone Number:")
-        phone_label.setStyleSheet("font-weight: bold; color: #333333;")
+        phone_label.setStyleSheet(
+            "font-weight: 500; font-size: 12pt; color: #E0E0E0; font-family: 'Roboto';")
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("e.g., +989123456789")
+        self.phone_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 8px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            }
+            QLineEdit:focus {
+                border: 1px solid #26A69A;
+                background-color: #3A3A3A;
+                box-shadow: 0 2px 6px rgba(38, 166, 154, 0.3);
+            }
+        """)
         phone_layout.addWidget(phone_label)
         phone_layout.addWidget(self.phone_input)
         phone_frame.setLayout(phone_layout)
         layout.addWidget(phone_frame)
 
+        # Timezone Section
         tz_frame = QFrame()
         tz_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
+        tz_frame.setStyleSheet(
+            "background-color: #484848; border: none; border-radius: 8px; padding: 15px;")
         tz_layout = QHBoxLayout()
+        tz_layout.setSpacing(15)
         tz_label = QLabel("Timezone:")
-        tz_label.setStyleSheet("font-weight: bold; color: #333333;")
+        tz_label.setStyleSheet(
+            "font-weight: 500; font-size: 12pt; color: #E0E0E0; font-family: 'Roboto';")
         self.tz_combo = QComboBox()
         self.tz_combo.addItems([
             "Iran (UTC+3:30)",
@@ -257,19 +410,78 @@ class MainWindow(QMainWindow):
             "United Kingdom (UTC+0:00)",
             "Other (UTC)"
         ])
+        self.tz_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 8px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QComboBox:hover {
+                background-color: #3A3A3A;
+                border: 1px solid #666666;
+            }
+            QComboBox::drop-down {
+                width: 24px;
+                border: none;
+                background: transparent;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                width: 12px;
+                height: 12px;
+                margin-right: 8px;
+                border-left: 6px solid transparent;
+                border-right: 6px solid transparent;
+                border-top: 6px solid #E0E0E0;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #333333;
+                color: #E0E0E0;
+                selection-background-color: #26A69A;
+                selection-color: #FFFFFF;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 4px;
+            }
+        """)
         tz_layout.addWidget(tz_label)
         tz_layout.addWidget(self.tz_combo)
         tz_frame.setLayout(tz_layout)
         layout.addWidget(tz_frame)
 
-        self.connect_button = QPushButton("Connect to Telegram")
+        self.connect_button = QPushButton("🔒 Connect to Telegram")
         self.connect_button.clicked.connect(self.connect_telegram)
-        self.connect_button.setStyleSheet(
-            "background-color: #4CAF50; color: white;")
+        self.connect_button.setStyleSheet("""
+            QPushButton {
+                background-color: #26A69A;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 12px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #4DB6AC;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #00897B;
+                transform: scale(0.98);
+            }
+        """)
         layout.addWidget(self.connect_button)
 
         self.login_status = QLabel(
             "Enter your phone number and timezone to connect.")
+        self.login_status.setStyleSheet(
+            "font-size: 10pt; color: #B0BEC5; font-family: 'Roboto';")
         layout.addWidget(self.login_status)
 
         layout.addStretch()
@@ -278,9 +490,26 @@ class MainWindow(QMainWindow):
     def setup_chats_tab(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
 
         self.chats_list = QListWidget()
+        self.chats_list.setStyleSheet("""
+            QListWidget {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QListWidget::item:selected {
+                background-color: #26A69A;
+                color: #FFFFFF;
+            }
+            QListWidget::item:hover {
+                background-color: #3A3A3A;
+            }
+        """)
         layout.addWidget(self.chats_list)
 
         self.chats_tab.setLayout(layout)
@@ -288,31 +517,114 @@ class MainWindow(QMainWindow):
     def setup_messages_tab(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
 
+        # Chat Selection Section
         chats_frame = QFrame()
         chats_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
+        chats_frame.setStyleSheet(
+            "background-color: #484848; border: none; border-radius: 8px; padding: 15px;")
         chats_layout = QHBoxLayout()
+        chats_layout.setSpacing(15)
         chats_label = QLabel("Select Chat:")
-        chats_label.setStyleSheet("font-weight: bold; color: #333333;")
+        chats_label.setStyleSheet(
+            "font-weight: 500; font-size: 12pt; color: #E0E0E0; font-family: 'Roboto';")
         self.messages_chat_combo = QComboBox()
         self.messages_chat_combo.setMinimumWidth(300)
+        self.messages_chat_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 8px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QComboBox:hover {
+                background-color: #3A3A3A;
+                border: 1px solid #666666;
+            }
+            QComboBox::drop-down {
+                width: 24px;
+                border: none;
+                background: transparent;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                width: 12px;
+                height: 12px;
+                margin-right: 8px;
+                border-left: 6px solid transparent;
+                border-right: 6px solid transparent;
+                border-top: 6px solid #E0E0E0;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #333333;
+                color: #E0E0E0;
+                selection-background-color: #26A69A;
+                selection-color: #FFFFFF;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 4px;
+            }
+        """)
         chats_layout.addWidget(chats_label)
         chats_layout.addWidget(self.messages_chat_combo)
         chats_frame.setLayout(chats_layout)
         layout.addWidget(chats_frame)
 
+        # Buttons Section
         button_layout = QHBoxLayout()
-        fetch_button = QPushButton("Fetch Messages for Selected Chat")
+        fetch_button = QPushButton("📥 Fetch Messages for Selected Chat")
         fetch_button.clicked.connect(self.fetch_chat_messages)
-        fetch_button.setStyleSheet("background-color: #4CAF50; color: white;")
+        fetch_button.setStyleSheet("""
+            QPushButton {
+                background-color: #26A69A;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 12px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #4DB6AC;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #00897B;
+                transform: scale(0.98);
+            }
+        """)
         button_layout.addWidget(fetch_button)
 
-        self.cancel_button = QPushButton("Cancel Fetching")
+        self.cancel_button = QPushButton("❌ Cancel Fetching")
         self.cancel_button.clicked.connect(self.cancel_fetching)
         self.cancel_button.setVisible(False)
-        self.cancel_button.setStyleSheet(
-            "background-color: #F44336; color: white;")
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: #EF5350;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 12px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #F44336;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #D32F2F;
+                transform: scale(0.98);
+            }
+        """)
         button_layout.addWidget(
             self.cancel_button, alignment=Qt.AlignmentFlag.AlignLeft)
 
@@ -320,18 +632,43 @@ class MainWindow(QMainWindow):
 
         self.messages_display = QTextEdit()
         self.messages_display.setReadOnly(True)
-        self.messages_display.setFont(QFont("Arial", 10))
+        self.messages_display.setFont(QFont("Arial", 14))
+        self.messages_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                font-family: 'Roboto';
+                font-size: 14pt;
+            }
+        """)
         layout.addWidget(self.messages_display)
 
         self.messages_progress = QProgressBar()
         self.messages_progress.setVisible(False)
         self.messages_progress.setRange(0, 100)
         self.messages_progress.setValue(0)
-        self.messages_progress.setStyleSheet(
-            "QProgressBar { border: 1px solid grey; border-radius: 5px; } QProgressBar::chunk { background-color: #4CAF50; }")
+        self.messages_progress.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #555555;
+                border-radius: 6px;
+                background-color: #333333;
+                text-align: center;
+                color: #E0E0E0;
+                font-family: 'Roboto';
+                font-size: 10pt;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #26A69A, stop:1 #4DD0E1);
+                border-radius: 6px;
+            }
+        """)
         layout.addWidget(self.messages_progress)
 
         self.messages_status_label = QLabel("Ready to fetch messages.")
+        self.messages_status_label.setStyleSheet(
+            "font-size: 10pt; color: #B0BEC5; font-family: 'Roboto';")
         layout.addWidget(self.messages_status_label)
 
         self.messages_tab.setLayout(layout)
@@ -339,43 +676,154 @@ class MainWindow(QMainWindow):
     def setup_search_tab(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(30)
 
-        search_frame = QFrame()
-        search_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        search_layout = QHBoxLayout()
+        # Input Section
+        search_input_frame = QFrame()
+        search_input_frame.setFrameStyle(
+            QFrame.Shape.Box | QFrame.Shadow.Raised)
+        search_input_frame.setStyleSheet(
+            "background-color: #484848; border: none; border-radius: 8px; padding: 15px;")
+        search_input_layout = QHBoxLayout()
+        search_input_layout.setSpacing(15)
         search_label = QLabel("Username:")
-        search_label.setStyleSheet("font-weight: bold; color: #333333;")
+        search_label.setStyleSheet(
+            "font-weight: 500; font-size: 12pt; color: #E0E0E0; font-family: 'Roboto';")
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("e.g., @username")
-        search_button = QPushButton("Search")
+        self.search_input.setMinimumWidth(300)
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                padding: 8px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QLineEdit:focus {
+                border: 1px solid #26A69A;
+                background-color: #3A3A3A;
+            }
+        """)
+        search_button = QPushButton("🔍 Search")
         search_button.clicked.connect(self.search_username)
-        search_button.setStyleSheet("background-color: #4CAF50; color: white;")
-        search_layout.addWidget(search_label)
-        search_layout.addWidget(self.search_input)
-        search_layout.addWidget(search_button)
-        search_frame.setLayout(search_layout)
-        layout.addWidget(search_frame)
+        search_button.setStyleSheet("""
+            QPushButton {
+                background-color: #26A69A;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #4DB6AC;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #00897B;
+                transform: scale(0.98);
+            }
+        """)
+        search_input_layout.addWidget(search_label)
+        search_input_layout.addWidget(self.search_input)
+        search_input_layout.addWidget(search_button)
+        search_input_frame.setLayout(search_input_layout)
+        layout.addWidget(search_input_frame)
+
+        # Output Section
+        search_output_frame = QFrame()
+        search_output_frame.setFrameStyle(
+            QFrame.Shape.Box | QFrame.Shadow.Raised)
+        search_output_frame.setStyleSheet(
+            "background-color: #484848; border: none; border-radius: 8px; padding: 15px;")
+        search_output_layout = QVBoxLayout()
+
+        search_output_label = QLabel("Search Results:")
+        search_output_label.setStyleSheet(
+            "font-weight: 500; font-size: 12pt; color: #E0E0E0; font-family: 'Roboto'; margin-bottom: 10px;")
+        search_output_layout.addWidget(search_output_label)
 
         self.search_results_list = QListWidget()
         self.search_results_list.itemClicked.connect(
             self.on_search_result_clicked)
-        layout.addWidget(self.search_results_list)
+        self.search_results_list.setStyleSheet("""
+            QListWidget {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QListWidget::item:selected {
+                background-color: #26A69A;
+                color: #FFFFFF;
+            }
+            QListWidget::item:hover {
+                background-color: #3A3A3A;
+            }
+        """)
+        search_output_layout.addWidget(self.search_results_list)
+        search_output_frame.setLayout(search_output_layout)
+        layout.addWidget(search_output_frame)
 
         self.search_tab.setLayout(layout)
 
     def setup_search_history_tab(self):
         self.history_layout = QVBoxLayout()
         self.history_layout.setContentsMargins(20, 20, 20, 20)
-        self.history_layout.setSpacing(15)
+        self.history_layout.setSpacing(20)
 
         self.history_list = QListWidget()
+        self.history_list.setStyleSheet("""
+            QListWidget {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+            QListWidget::item:selected {
+                background-color: #26A69A;
+                color: #FFFFFF;
+            }
+            QListWidget::item:hover {
+                background-color: #3A3A3A;
+            }
+        """)
         self.history_layout.addWidget(self.history_list)
 
         button_layout = QHBoxLayout()
-        view_button = QPushButton("View Messages")
+        view_button = QPushButton("📜 View Messages")
         view_button.clicked.connect(self.view_history_messages)
-        view_button.setStyleSheet("background-color: #4CAF50; color: white;")
+        view_button.setStyleSheet("""
+            QPushButton {
+                background-color: #26A69A;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #4DB6AC;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #00897B;
+                transform: scale(0.98);
+            }
+        """)
         button_layout.addWidget(view_button)
         self.history_layout.addLayout(button_layout)
 
@@ -385,31 +833,118 @@ class MainWindow(QMainWindow):
 
         self.history_messages_display = QTextEdit()
         self.history_messages_display.setReadOnly(True)
-        self.history_messages_display.setFont(QFont("Arial", 10))
+        self.history_messages_display.setFont(QFont("Arial", 14))
+        self.history_messages_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                font-family: 'Roboto';
+                font-size: 14pt;
+            }
+        """)
         messages_layout.addWidget(self.history_messages_display)
 
         manage_buttons_layout = QHBoxLayout()
-        delete_recent_button = QPushButton("Delete Recent Messages")
+        delete_recent_button = QPushButton("🗑️ Delete Recent Messages")
         delete_recent_button.clicked.connect(self.delete_recent_messages)
-        delete_recent_button.setStyleSheet(
-            "background-color: #F44336; color: white;")
+        delete_recent_button.setStyleSheet("""
+            QPushButton {
+                background-color: #EF5350;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #F44336;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #D32F2F;
+                transform: scale(0.98);
+            }
+        """)
         manage_buttons_layout.addWidget(delete_recent_button)
 
-        delete_date_button = QPushButton("Delete Messages from Date")
+        delete_date_button = QPushButton("🗓️ Delete Messages from Date")
         delete_date_button.clicked.connect(self.delete_messages_from_date)
-        delete_date_button.setStyleSheet(
-            "background-color: #F44336; color: white;")
+        delete_date_button.setStyleSheet("""
+            QPushButton {
+                background-color: #EF5350;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #F44336;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #D32F2F;
+                transform: scale(0.98);
+            }
+        """)
         manage_buttons_layout.addWidget(delete_date_button)
 
-        delete_all_button = QPushButton("Delete All Messages")
+        delete_all_button = QPushButton("🗑️ Delete All Messages")
         delete_all_button.clicked.connect(self.delete_all_messages)
-        delete_all_button.setStyleSheet(
-            "background-color: #F44336; color: white;")
+        delete_all_button.setStyleSheet("""
+            QPushButton {
+                background-color: #EF5350;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #F44336;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #D32F2F;
+                transform: scale(0.98);
+            }
+        """)
         manage_buttons_layout.addWidget(delete_all_button)
 
-        back_button = QPushButton("Back to List")
+        back_button = QPushButton("⬅️ Back to List")
         back_button.clicked.connect(self.back_to_history_list)
-        back_button.setStyleSheet("background-color: #2196F3; color: white;")
+        back_button.setStyleSheet("""
+            QPushButton {
+                background-color: #42A5F5;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #64B5F6;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #1976D2;
+                transform: scale(0.98);
+            }
+        """)
         manage_buttons_layout.addWidget(back_button)
 
         messages_layout.addLayout(manage_buttons_layout)
@@ -418,6 +953,8 @@ class MainWindow(QMainWindow):
 
         self.history_status_label = QLabel(
             "Select a chat to view saved messages.")
+        self.history_status_label.setStyleSheet(
+            "font-size: 10pt; color: #B0BEC5; font-family: 'Roboto';")
         self.history_layout.addWidget(self.history_status_label)
 
         self.search_history_tab.setLayout(self.history_layout)
@@ -425,15 +962,36 @@ class MainWindow(QMainWindow):
     def setup_refresh_tab(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
 
-        refresh_button = QPushButton("Refresh Chat List")
+        refresh_button = QPushButton("🔄 Refresh Chat List")
         refresh_button.clicked.connect(self.refresh_chats)
-        refresh_button.setStyleSheet(
-            "background-color: #4CAF50; color: white;")
+        refresh_button.setStyleSheet("""
+            QPushButton {
+                background-color: #26A69A;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 12px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #4DB6AC;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #00897B;
+                transform: scale(0.98);
+            }
+        """)
         layout.addWidget(refresh_button)
 
         self.refresh_status = QLabel("Click to refresh the chat list.")
+        self.refresh_status.setStyleSheet(
+            "font-size: 10pt; color: #B0BEC5; font-family: 'Roboto';")
         layout.addWidget(self.refresh_status)
 
         layout.addStretch()
@@ -442,16 +1000,45 @@ class MainWindow(QMainWindow):
     def setup_logs_tab(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
 
         self.logs_text = QTextEdit()
         self.logs_text.setReadOnly(True)
+        self.logs_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #333333;
+                color: #E0E0E0;
+                border: 1px solid #555555;
+                border-radius: 6px;
+                font-family: 'Roboto';
+                font-size: 12pt;
+            }
+        """)
         layout.addWidget(self.logs_text)
 
-        refresh_logs_button = QPushButton("Refresh Logs")
+        refresh_logs_button = QPushButton("🔄 Refresh Logs")
         refresh_logs_button.clicked.connect(self.update_logs)
-        refresh_logs_button.setStyleSheet(
-            "background-color: #4CAF50; color: white;")
+        refresh_logs_button.setStyleSheet("""
+            QPushButton {
+                background-color: #26A69A;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Roboto';
+                font-size: 10pt;
+                font-weight: 500;
+                transition: all 0.2s;
+            }
+            QPushButton:hover {
+                background-color: #4DB6AC;
+                transform: scale(1.02);
+            }
+            QPushButton:pressed {
+                background-color: #00897B;
+                transform: scale(0.98);
+            }
+        """)
         layout.addWidget(refresh_logs_button)
 
         self.logs_tab.setLayout(layout)
