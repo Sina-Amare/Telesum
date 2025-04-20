@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, BigInteger, text, select
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, BigInteger, text, select, distinct
 from sqlalchemy.orm import sessionmaker, Mapped, mapped_column
 try:
     from sqlalchemy.orm import declarative_base
@@ -7,8 +7,10 @@ except ImportError:
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from datetime import datetime, timedelta
 import pytz
-from config import MAX_MESSAGES_PER_CHAT, DATABASE_URL, VERBOSE_LOGGING
+from config import MAX_MESSAGES_PER_CHAT, DATABASE_URL, VERBOSE_LOGGING, ENCRYPTION_KEY
 import logging
+from cryptography.fernet import Fernet
+import base64
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -18,7 +20,19 @@ Base = declarative_base()
 engine = create_engine(DATABASE_URL, echo=False)
 Session = sessionmaker(bind=engine)
 
+# Encryption key for API_ID and API_HASH
+cipher = Fernet(ENCRYPTION_KEY)
+
 # Define database models
+
+
+class UserSettings(Base):
+    """Model for the user_settings table to store API credentials for each user."""
+    __tablename__ = "user_settings"
+    user_phone: Mapped[str] = mapped_column(String, primary_key=True)
+    api_id: Mapped[str] = mapped_column(String, nullable=False)  # Encrypted
+    api_hash: Mapped[str] = mapped_column(String, nullable=False)  # Encrypted
+    last_login: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class Chat(Base):
@@ -73,6 +87,123 @@ def setup_database():
         raise
 
 
+def encrypt_data(data):
+    """Encrypt sensitive data (e.g., API_ID, API_HASH)."""
+    try:
+        if isinstance(data, int):
+            data = str(data)
+        return cipher.encrypt(data.encode()).decode()
+    except Exception as e:
+        logger.error(f"Error encrypting data: {e}")
+        raise
+
+
+def decrypt_data(encrypted_data):
+    """Decrypt sensitive data (e.g., API_ID, API_HASH)."""
+    try:
+        decrypted = cipher.decrypt(encrypted_data.encode()).decode()
+        return decrypted
+    except Exception as e:
+        logger.error(f"Error decrypting data: {e}")
+        raise
+
+
+def save_user_settings(user_phone, api_id, api_hash):
+    """Save or update user settings (API_ID, API_HASH) in the database."""
+    session = Session()
+    try:
+        encrypted_api_id = encrypt_data(api_id)
+        encrypted_api_hash = encrypt_data(api_hash)
+        last_login = datetime.now(pytz.UTC)
+        session.merge(UserSettings(
+            user_phone=user_phone,
+            api_id=encrypted_api_id,
+            api_hash=encrypted_api_hash,
+            last_login=last_login
+        ))
+        session.commit()
+        logger.info(f"Saved user settings for {user_phone}")
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error saving user settings: {e}")
+        raise
+    finally:
+        session.close()
+
+
+def load_user_settings(user_phone):
+    """Load user settings (API_ID, API_HASH) for a specific user from the database."""
+    session = Session()
+    try:
+        user_settings = session.query(UserSettings).filter_by(
+            user_phone=user_phone).first()
+        if user_settings:
+            api_id = decrypt_data(user_settings.api_id)
+            api_hash = decrypt_data(user_settings.api_hash)
+            return int(api_id), api_hash
+        return None
+    except Exception as e:
+        logger.error(f"Error loading user settings: {e}")
+        return None
+    finally:
+        session.close()
+
+
+def load_all_users():
+    """Load all user phones from the database, sorted by last login (most recent first)."""
+    session = Session()
+    try:
+        users = session.query(UserSettings).order_by(
+            UserSettings.last_login.desc()).all()
+        return [user.user_phone for user in users]
+    except Exception as e:
+        logger.error(f"Error loading all users: {e}")
+        return []
+    finally:
+        session.close()
+
+
+def load_users_with_search_history():
+    """Load all user phones that have at least one message in the messages table."""
+    session = Session()
+    try:
+        users = session.query(distinct(Message.user_phone)).all()
+        user_list = [user[0] for user in users]
+        logger.info(f"Loaded {len(user_list)} users with messages.")
+        return user_list
+    except Exception as e:
+        logger.error(f"Error loading users with messages: {e}")
+        return []
+    finally:
+        session.close()
+
+
+def load_chats_with_messages(user_phone):
+    """Load all chats that have at least one message for a specific user."""
+    session = Session()
+    try:
+        # Get distinct chat_ids from messages table for the user
+        chat_ids = session.query(distinct(Message.chat_id)).filter_by(
+            user_phone=user_phone).all()
+        chat_ids = [chat_id[0] for chat_id in chat_ids]
+
+        # Get chat details from chats table
+        chats = session.query(Chat).filter(
+            Chat.user_phone == user_phone,
+            Chat.id.in_(chat_ids)
+        ).all()
+
+        chat_list = [(chat.id, chat.name, chat.username) for chat in chats]
+        logger.info(
+            f"Loaded {len(chat_list)} chats with messages for user {user_phone}")
+        return chat_list
+    except Exception as e:
+        logger.error(f"Error loading chats with messages: {e}")
+        return []
+    finally:
+        session.close()
+
+
 def save_chats(chats, user_phone):
     session = Session()
     try:
@@ -117,19 +248,20 @@ def load_chats(user_phone):
 
 
 def save_search_history(username, user_phone):
-    """Save a username to the search history for a specific user."""
-    session = Session()
-    try:
-        timestamp = datetime.now(pytz.UTC)
-        session.add(SearchHistory(username=username,
-                    timestamp=timestamp, user_phone=user_phone))
-        session.commit()
-        logger.info(f"Saved search history for username: {username}")
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Error saving search history: {e}")
-    finally:
-        session.close()
+    """Temporarily disabled to avoid adding new entries to search history."""
+    # session = Session()
+    # try:
+    #     timestamp = datetime.now(pytz.UTC)
+    #     session.add(SearchHistory(username=username,
+    #                 timestamp=timestamp, user_phone=user_phone))
+    #     session.commit()
+    #     logger.info(f"Saved search history for username: {username}")
+    # except Exception as e:
+    #     session.rollback()
+    #     logger.error(f"Error saving search history: {e}")
+    # finally:
+    #     session.close()
+    pass
 
 
 def load_search_history(user_phone):

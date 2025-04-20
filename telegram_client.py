@@ -25,9 +25,12 @@ os.makedirs(SESSION_DIR, exist_ok=True)
 class TelegramManager:
     """Manages Telegram client operations such as connection, login, and message fetching."""
 
-    def __init__(self, session_name, api_id, api_hash, parent=None):
-        """Initialize the Telegram client."""
-        session_path = os.path.join(SESSION_DIR, f"{session_name}.session")
+    def __init__(self, user_phone, api_id, api_hash, parent=None):
+        """Initialize the Telegram client with a session name based on the user phone."""
+        # Use user_phone to create a unique session file for each account
+        # Clean the phone number to remove invalid characters for filenames
+        session_name = user_phone.replace("+", "").replace(" ", "")
+        session_path = os.path.join(SESSION_DIR, f"session_{session_name}")
         self.client = TelegramClient(session_path, api_id, api_hash)
         self.me = None  # To store current user info
         self.parent = parent  # Reference to parent widget for GUI dialogs
@@ -96,6 +99,51 @@ class TelegramManager:
             return await self.fetch_chats()
         except Exception as e:
             logger.error(f"Error loading chats: {e}")
+            return []
+        finally:
+            await self.toggle_updates(True)
+
+    async def search_chat_by_id_or_name(self, search_term):
+        """Search for chats by ID, name, or username (case-insensitive). Returns a list of matching (chat_id, name, username)."""
+        logger.info(f"Searching for chat with term: {search_term}")
+        chats = []
+        try:
+            await self.toggle_updates(False)
+            async for dialog in self.client.iter_dialogs():
+                if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
+                    chat_id = str(dialog.id)
+                    chat_name = dialog.name.lower()
+                    username = dialog.entity.username.lower() if dialog.entity.username else ""
+                    search_term_lower = search_term.lower()
+
+                    # If search term starts with '@', search by username only
+                    if search_term_lower.startswith('@'):
+                        search_term_clean = search_term_lower[1:]  # Remove '@'
+                        if search_term_clean and search_term_clean == username:
+                            chats.append(
+                                (dialog.id, dialog.name, dialog.entity.username))
+                            if VERBOSE_LOGGING:
+                                logger.debug(
+                                    f"Found matching chat by username: {dialog.name} (ID: {dialog.id}, Username: {dialog.entity.username})")
+                    else:
+                        # Match by ID or name
+                        if search_term_lower == chat_id or search_term_lower in chat_name:
+                            chats.append(
+                                (dialog.id, dialog.name, dialog.entity.username))
+                            if VERBOSE_LOGGING:
+                                logger.debug(
+                                    f"Found matching chat by ID or name: {dialog.name} (ID: {dialog.id})")
+
+            logger.info(
+                f"Found {len(chats)} chats matching search term: {search_term}")
+            return chats
+        except FloodWaitError as e:
+            wait_time = e.seconds
+            logger.warning(f"FloodWaitError: Waiting for {wait_time} seconds.")
+            await asyncio.sleep(wait_time)
+            return await self.search_chat_by_id_or_name(search_term)
+        except Exception as e:
+            logger.error(f"Error searching chats: {e}")
             return []
         finally:
             await self.toggle_updates(True)
