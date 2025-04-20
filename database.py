@@ -11,11 +11,6 @@ from config import MAX_MESSAGES_PER_CHAT, DATABASE_URL, VERBOSE_LOGGING
 import logging
 
 # Set up logging
-logging.basicConfig(
-    filename='app.log',
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 # Initialize SQLAlchemy
@@ -72,9 +67,8 @@ def setup_database():
     """Initialize the PostgreSQL database and create necessary tables."""
     try:
         Base.metadata.create_all(engine)
-        print("Database initialized successfully.")
+        logger.info("Database initialized successfully.")
     except Exception as e:
-        print(f"Error initializing database: {e}")
         logger.error(f"Error initializing database: {e}")
         raise
 
@@ -87,22 +81,21 @@ def save_chats(chats, user_phone):
         logger.debug(f"Existing chats for {user_phone}: {existing_chats}")
         new_or_updated = 0
         for chat_id, name, username in chats:
-            logger.debug(
-                f"Saving chat: ID={chat_id}, name={name}, username={username}")
+            if VERBOSE_LOGGING:
+                logger.debug(
+                    f"Saving chat: ID={chat_id}, name={name}, username={username}")
             if chat_id not in existing_chats or existing_chats[chat_id] != (name, username):
                 session.merge(Chat(id=chat_id, name=name,
                               username=username, user_phone=user_phone))
                 new_or_updated += 1
         session.commit()
         if new_or_updated > 0:
-            print(f"Updated {new_or_updated} chats for user {user_phone}.")
             logger.info(
                 f"Updated {new_or_updated} chats for user {user_phone}")
         else:
             logger.info(f"No new chats to update for user {user_phone}")
     except Exception as e:
         session.rollback()
-        print(f"Error saving chats: {e}")
         logger.error(f"Error saving chats: {e}")
     finally:
         session.close()
@@ -112,13 +105,11 @@ def load_chats(user_phone):
     session = Session()
     try:
         raw_chats = session.query(Chat).filter_by(user_phone=user_phone).all()
-        print(
-            f"Raw chats from database for {user_phone}: {[(chat.id, chat.name, chat.username) for chat in raw_chats]}")
         chats = [(chat.id, chat.name, chat.username) for chat in raw_chats]
-        logger.info(f"Loaded {len(chats)} chats for user {user_phone}")
+        logger.info(
+            f"Loaded {len(chats)} chats from database for user {user_phone}")
         return chats
     except Exception as e:
-        print(f"Error loading chats: {e}")
         logger.error(f"Error loading chats: {e}")
         return []
     finally:
@@ -133,11 +124,9 @@ def save_search_history(username, user_phone):
         session.add(SearchHistory(username=username,
                     timestamp=timestamp, user_phone=user_phone))
         session.commit()
-        print(f"Saved search history for username: {username}")
         logger.info(f"Saved search history for username: {username}")
     except Exception as e:
         session.rollback()
-        print(f"Error saving search history: {e}")
         logger.error(f"Error saving search history: {e}")
     finally:
         session.close()
@@ -149,13 +138,10 @@ def load_search_history(user_phone):
     try:
         history = [(entry.id, entry.username, entry.timestamp.isoformat()) for entry in
                    session.query(SearchHistory).filter_by(user_phone=user_phone).order_by(SearchHistory.timestamp.desc()).all()]
-        print(
-            f"Found {len(history)} search history entries for user {user_phone}.")
         logger.info(
             f"Found {len(history)} search history entries for user {user_phone}")
         return history
     except Exception as e:
-        print(f"Error loading search history: {e}")
         logger.error(f"Error loading search history: {e}")
         return []
     finally:
@@ -171,7 +157,6 @@ def delete_search_history_entry(entry_id):
         logger.info(f"Deleted search history entry ID {entry_id}")
     except Exception as e:
         session.rollback()
-        print(f"Error deleting search history entry: {e}")
         logger.error(f"Error deleting search history entry: {e}")
     finally:
         session.close()
@@ -186,7 +171,6 @@ def delete_all_search_history(user_phone):
         logger.info(f"Deleted all search history for user {user_phone}")
     except Exception as e:
         session.rollback()
-        print(f"Error deleting all search history: {e}")
         logger.error(f"Error deleting all search history: {e}")
     finally:
         session.close()
@@ -194,7 +178,6 @@ def delete_all_search_history(user_phone):
 
 def save_messages(db_session, chat_id, user_phone, messages, max_messages_per_chat=MAX_MESSAGES_PER_CHAT):
     """Save messages to the database, skipping duplicates efficiently."""
-    # Fetch existing message IDs for the chat and user
     existing_message_ids = set(
         row[0] for row in db_session.execute(
             select(Message.message_id).filter_by(
@@ -209,8 +192,9 @@ def save_messages(db_session, chat_id, user_phone, messages, max_messages_per_ch
     for i, (sender, message_text, timestamp, message_id) in enumerate(messages):
         if message_id in existing_message_ids:
             duplicate_count += 1
-            logger.debug(
-                f"Skipped duplicate message ID {message_id} for chat ID {chat_id}")
+            if VERBOSE_LOGGING:
+                logger.debug(
+                    f"Skipped duplicate message ID {message_id} for chat ID {chat_id}")
             continue
 
         try:
@@ -239,10 +223,8 @@ def save_messages(db_session, chat_id, user_phone, messages, max_messages_per_ch
             new_messages_count += 1
 
             if VERBOSE_LOGGING:
-                print(
+                logger.debug(
                     f"Added message {i+1}/{total_messages}: {sender}: {message_text} (ID: {message_id}, {timestamp})")
-            logger.debug(
-                f"Added message {i+1}: sender={sender}, text={message_text}, timestamp={timestamp}, message_id={message_id}")
 
         except IntegrityError as ie:
             db_session.rollback()
@@ -252,14 +234,12 @@ def save_messages(db_session, chat_id, user_phone, messages, max_messages_per_ch
             continue
         except Exception as e:
             db_session.rollback()
-            print(f"Error adding message {i+1}: {e}")
             logger.error(f"Error adding message {i+1}: {e}")
             continue
 
     if new_messages_count > 0:
         try:
             db_session.commit()
-            # Remove excess messages beyond the limit
             db_session.execute(text("""
                 DELETE FROM messages 
                 WHERE chat_id = :chat_id AND user_phone = :user_phone AND id NOT IN (
@@ -276,16 +256,12 @@ def save_messages(db_session, chat_id, user_phone, messages, max_messages_per_ch
             db_session.rollback()
             logger.error(
                 f"Error committing messages for chat ID {chat_id}: {e}")
-            print(
-                f"Failed to save {new_messages_count} messages for chat ID {chat_id}: {e}")
     else:
         logger.info(f"No new messages to save for chat ID {chat_id}")
 
     if duplicate_count > 0:
         logger.info(
             f"Skipped {duplicate_count} duplicate messages for chat ID {chat_id}")
-    print(
-        f"Processed {total_messages} messages: {new_messages_count} new, {duplicate_count} already in database")
     return new_messages_count
 
 
@@ -354,15 +330,14 @@ def load_messages(chat_id, filter_type, filter_value, user_phone, user_timezone=
             f"Loaded {len(messages)} messages for chat ID {chat_id}, filter: {filter_type}")
         return messages, full_day_covered, latest_timestamp
     except Exception as e:
-        print(f"Error loading messages: {e}")
         logger.error(f"Error loading messages: {e}")
         return [], False, None
     finally:
         session.close()
 
 
-def delete_messages(chat_id, user_phone, num_messages=None, specific_date=None):
-    """Delete messages for a specific chat and user from the database."""
+def delete_messages(chat_id, user_phone, num_messages=None, specific_date=None, user_timezone=None):
+    """Delete messages for a specific chat and user from the database, respecting user timezone."""
     session = Session()
     try:
         query = session.query(Message).filter_by(
@@ -377,21 +352,25 @@ def delete_messages(chat_id, user_phone, num_messages=None, specific_date=None):
             )
             query = query.filter(Message.id.in_(subquery))
         elif specific_date is not None:
-            specific_date = datetime.strptime(specific_date, "%d %B %Y").replace(
-                hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC
-            )
-            min_date = specific_date
-            max_date = min_date + timedelta(days=1) - timedelta(seconds=1)
+            specific_date = datetime.strptime(specific_date, "%d %B %Y")
+            if user_timezone:
+                local_start = user_timezone.localize(
+                    specific_date.replace(hour=0, minute=0, second=0))
+                local_end = local_start.replace(hour=23, minute=59, second=59)
+                min_date = local_start.astimezone(pytz.UTC)
+                max_date = local_end.astimezone(pytz.UTC)
+            else:
+                min_date = specific_date.replace(
+                    hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC)
+                max_date = min_date + timedelta(days=1) - timedelta(seconds=1)
             query = query.filter(Message.timestamp.between(min_date, max_date))
 
         deleted_count = query.delete(synchronize_session=False)
         session.commit()
-        print(f"Deleted {deleted_count} messages for chat ID {chat_id}")
         logger.info(f"Deleted {deleted_count} messages for chat ID {chat_id}")
         return deleted_count
     except SQLAlchemyError as e:
         session.rollback()
-        print(f"Error deleting messages: {e}")
         logger.error(f"Error deleting messages: {e}")
         return 0
     finally:
@@ -409,7 +388,6 @@ def save_last_update_timestamp(user_phone):
         logger.info(f"Saved last update timestamp for user {user_phone}")
     except Exception as e:
         session.rollback()
-        print(f"Error saving last update timestamp: {e}")
         logger.error(f"Error saving last update timestamp: {e}")
     finally:
         session.close()
@@ -431,7 +409,6 @@ def load_last_update_timestamp(user_phone):
             return timestamp
         return None
     except Exception as e:
-        print(f"Error loading last update timestamp: {e}")
         logger.error(f"Error loading last update timestamp: {e}")
         return None
     finally:

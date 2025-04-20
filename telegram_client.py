@@ -14,11 +14,6 @@ from PyQt6.QtWidgets import QInputDialog
 import logging
 
 # Set up logging
-logging.basicConfig(
-    filename='app.log',
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 # Base directory for session file
@@ -83,13 +78,15 @@ class TelegramManager:
         try:
             await self.toggle_updates(False)
             async for dialog in self.client.iter_dialogs():
-                logger.debug(
-                    f"Processing dialog: {dialog.name}, is_user={dialog.is_user}, entity_type={type(dialog.entity)}")
+                if VERBOSE_LOGGING:
+                    logger.debug(
+                        f"Processing dialog: {dialog.name}, is_user={dialog.is_user}, entity_type={type(dialog.entity)}")
                 if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
                     chats.append(
                         (dialog.id, dialog.name, dialog.entity.username))
-                    logger.debug(
-                        f"Added chat: {dialog.name} (ID: {dialog.id})")
+                    if VERBOSE_LOGGING:
+                        logger.debug(
+                            f"Added chat: {dialog.name} (ID: {dialog.id})")
             logger.info(f"Retrieved {len(chats)} private chats from Telegram")
             return chats
         except FloodWaitError as e:
@@ -120,8 +117,9 @@ class TelegramManager:
                     if last_update_timestamp is None or dialog_date > last_update_timestamp:
                         new_chats.append(
                             (dialog.id, dialog.name, dialog.entity.username))
-                        logger.debug(
-                            f"Added new chat: {dialog.name} (ID: {dialog.id})")
+                        if VERBOSE_LOGGING:
+                            logger.debug(
+                                f"Added new chat: {dialog.name} (ID: {dialog.id})")
             if new_chats:
                 logger.info(f"Found {len(new_chats)} new or updated chats")
             else:
@@ -164,7 +162,6 @@ class TelegramManager:
 
     async def get_messages(self, chat_id, filter_type, filter_value, user_timezone, user_phone, progress_callback=None):
         """Fetch messages from a chat based on the specified filter and user timezone."""
-        # Load existing messages from database
         db_messages, full_day_covered, latest_timestamp = load_messages(
             chat_id, filter_type, filter_value, user_phone, user_timezone)
         messages = []
@@ -172,13 +169,12 @@ class TelegramManager:
 
         try:
             await self.toggle_updates(False)
-            batch_size = 50  # Fetch messages in batches
+            batch_size = 50
 
             if filter_type == "recent_messages":
                 messages_to_fetch = filter_value
                 offset_id = 0
 
-                # Fetch messages from Telegram
                 while total_fetched < messages_to_fetch:
                     batch = []
                     limit = min(batch_size, messages_to_fetch - total_fetched)
@@ -195,10 +191,10 @@ class TelegramManager:
                     total_fetched += len(batch)
                     if batch:
                         offset_id = batch[-1][3]
-                    # Update progress
                     if progress_callback:
-                        progress = (total_fetched / messages_to_fetch) * 100
-                        progress = min(progress, 100)
+                        progress = (total_fetched /
+                                    messages_to_fetch) * 90  # Limit to 90%
+                        progress = min(progress, 90)
                         await progress_callback(progress)
 
             elif filter_type == "specific_date":
@@ -209,11 +205,9 @@ class TelegramManager:
                 min_date = local_start.astimezone(pytz.UTC)
                 max_date = local_end.astimezone(pytz.UTC)
 
-                # If database has the full day covered, return those messages
                 if full_day_covered:
                     return db_messages
 
-                # Fetch messages from Telegram within the date range
                 offset_id = 0
                 while True:
                     batch = []
@@ -232,10 +226,9 @@ class TelegramManager:
                         break
                     messages.extend(batch)
                     total_fetched += len(batch)
-                    # Update progress (approximate, since we don't know total)
                     if progress_callback:
-                        # Approximate progress
-                        await progress_callback(min(total_fetched * 2, 100))
+                        progress = min(total_fetched * 1.8, 90)  # Limit to 90%
+                        await progress_callback(progress)
 
             elif filter_type == "recent_days":
                 min_date = datetime.now(user_timezone) - \
@@ -258,28 +251,24 @@ class TelegramManager:
                         break
                     messages.extend(batch)
                     total_fetched += len(batch)
-                    # Update progress (approximate)
                     if progress_callback:
-                        # Approximate progress
-                        await progress_callback(min(total_fetched * 2, 100))
+                        progress = min(total_fetched * 1.8, 90)  # Limit to 90%
+                        await progress_callback(progress)
 
-            # Combine with database messages
             combined_messages = db_messages + messages
             combined_messages = list(
                 {msg[3]: msg for msg in combined_messages}.values())
             combined_messages.sort(key=lambda x: x[2], reverse=True)
 
-            # Filter messages based on the filter type
             if filter_type == "recent_messages":
                 messages = combined_messages[:filter_value]
             elif filter_type == "recent_days":
                 messages = [
                     msg for msg in combined_messages if msg[2] >= min_date]
-            else:  # specific_date
+            else:
                 messages = [
                     msg for msg in combined_messages if min_date <= msg[2] <= max_date]
 
-            # Save to database
             if messages:
                 engine = create_engine(DATABASE_URL)
                 Session = sessionmaker(bind=engine)
