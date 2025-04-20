@@ -168,6 +168,50 @@ class MessageDialog(QWidget):
 
         self.setLayout(layout)
 
+    async def fetch_coro(self):  # Changed to async and renamed for clarity
+        try:
+            # Check database messages first
+            from database import load_messages
+            messages, full_day_covered, _ = load_messages(
+                self.chat_id, self.filter_type, self.filter_value, self.user_phone)
+
+            if not messages or (self.filter_type == "specific_date" and not full_day_covered):
+                if not messages:
+                    logger.info(
+                        "No messages found in database. Fetching from Telegram...")
+                else:
+                    logger.info(
+                        "Incomplete messages for this date. Fetching from Telegram...")
+
+            messages = await self.telegram.get_messages(self.chat_id, self.filter_type, self.filter_value, self.user_timezone, self.user_phone)
+            if messages is None:
+                return None
+
+            result = ""
+            if messages:
+                for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
+                    local_time = timestamp.astimezone(self.user_timezone)
+                    result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
+                message_texts = [msg for _, msg, _, _ in messages]
+                summary = await summarize_text(message_texts)  # Now awaited
+                result += "=== Summary ===\n" + summary + "\n"
+            else:
+                result = "No messages found."
+                # Log no messages found
+                if self.filter_type == "recent_messages":
+                    logger.info(
+                        f"No messages found in the last {self.filter_value} messages for {self.chat_name}.")
+                elif self.filter_type == "recent_days":
+                    logger.info(
+                        f"No messages found in the last {self.filter_value} days for {self.chat_name}.")
+                elif self.filter_type == "specific_date":
+                    logger.info(
+                        f"No messages found on {self.filter_value} for {self.chat_name}.")
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching messages: {e}")
+            raise
+
     def fetch_messages(self):
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)  # Indeterminate progress
@@ -183,51 +227,8 @@ class MessageDialog(QWidget):
             logger.info(
                 f"Checking database for messages in {self.chat_name} on {self.filter_value}...")
 
-        async def fetch_coro():
-            try:
-                # Check database messages first
-                from database import load_messages
-                messages, full_day_covered, _ = load_messages(
-                    self.chat_id, self.filter_type, self.filter_value, self.user_phone)
-
-                if not messages or (self.filter_type == "specific_date" and not full_day_covered):
-                    if not messages:
-                        logger.info(
-                            "No messages found in database. Fetching from Telegram...")
-                    else:
-                        logger.info(
-                            "Incomplete messages for this date. Fetching from Telegram...")
-
-                messages = await self.telegram.get_messages(self.chat_id, self.filter_type, self.filter_value, self.user_timezone, self.user_phone)
-                if messages is None:
-                    return None
-
-                result = ""
-                if messages:
-                    for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
-                        local_time = timestamp.astimezone(self.user_timezone)
-                        result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
-                    message_texts = [msg for _, msg, _, _ in messages]
-                    summary = summarize_text(message_texts)
-                    result += "=== Summary ===\n" + summary + "\n"
-                else:
-                    result = "No messages found."
-                    # Log no messages found
-                    if self.filter_type == "recent_messages":
-                        logger.info(
-                            f"No messages found in the last {self.filter_value} messages for {self.chat_name}.")
-                    elif self.filter_type == "recent_days":
-                        logger.info(
-                            f"No messages found in the last {self.filter_value} days for {self.chat_name}.")
-                    elif self.filter_type == "specific_date":
-                        logger.info(
-                            f"No messages found on {self.filter_value} for {self.chat_name}.")
-                return result
-            except Exception as e:
-                logger.error(f"Error fetching messages: {e}")
-                raise
-
-        task = asyncio.ensure_future(fetch_coro())
+        task = asyncio.ensure_future(
+            self.fetch_coro())  # Use the async coroutine
         task.add_done_callback(self.display_messages)
 
     def display_messages(self, task):
@@ -633,6 +634,50 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Error occurred")
             QMessageBox.critical(self, "Error", f"Failed to load chats: {e}")
 
+    async def fetch_coro(self, chat_id, chat_name, filter_type, filter_value):  # Changed to async
+        try:
+            # Check database messages first
+            from database import load_messages
+            messages, full_day_covered, _ = load_messages(
+                chat_id, filter_type, filter_value, self.user_phone)
+
+            if not messages or (filter_type == "specific_date" and not full_day_covered):
+                if not messages:
+                    logger.info(
+                        "No messages found in database. Fetching from Telegram...")
+                else:
+                    logger.info(
+                        "Incomplete messages for this date. Fetching from Telegram...")
+
+            messages = await self.telegram.get_messages(chat_id, filter_type, filter_value, self.user_timezone, self.user_phone)
+            if messages is None:
+                return None
+
+            result = ""
+            if messages:
+                for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
+                    local_time = timestamp.astimezone(self.user_timezone)
+                    result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
+                message_texts = [msg for _, msg, _, _ in messages]
+                summary = await summarize_text(message_texts)  # Now awaited
+                result += "=== Summary ===\n" + summary + "\n"
+            else:
+                result = "No messages found."
+                # Log no messages found
+                if filter_type == "recent_messages":
+                    logger.info(
+                        f"No messages found in the last {filter_value} messages for {chat_name}.")
+                elif filter_type == "recent_days":
+                    logger.info(
+                        f"No messages found in the last {filter_value} days for {chat_name}.")
+                elif filter_type == "specific_date":
+                    logger.info(
+                        f"No messages found on {filter_value} for {chat_name}.")
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching messages: {e}")
+            raise
+
     def fetch_chat_messages(self):
         selected_index = self.messages_chat_combo.currentIndex()
         if selected_index < 0 or not self.chats:
@@ -662,52 +707,8 @@ class MainWindow(QMainWindow):
                 logger.info(
                     f"Checking database for messages in {chat_name} on {filter_value}...")
 
-            async def fetch_coro():
-                try:
-                    # Check database messages first
-                    from database import load_messages
-                    messages, full_day_covered, _ = load_messages(
-                        chat_id, filter_type, filter_value, self.user_phone)
-
-                    if not messages or (filter_type == "specific_date" and not full_day_covered):
-                        if not messages:
-                            logger.info(
-                                "No messages found in database. Fetching from Telegram...")
-                        else:
-                            logger.info(
-                                "Incomplete messages for this date. Fetching from Telegram...")
-
-                    messages = await self.telegram.get_messages(chat_id, filter_type, filter_value, self.user_timezone, self.user_phone)
-                    if messages is None:
-                        return None
-
-                    result = ""
-                    if messages:
-                        for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
-                            local_time = timestamp.astimezone(
-                                self.user_timezone)
-                            result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
-                        message_texts = [msg for _, msg, _, _ in messages]
-                        summary = summarize_text(message_texts)
-                        result += "=== Summary ===\n" + summary + "\n"
-                    else:
-                        result = "No messages found."
-                        # Log no messages found
-                        if filter_type == "recent_messages":
-                            logger.info(
-                                f"No messages found in the last {filter_value} messages for {chat_name}.")
-                        elif filter_type == "recent_days":
-                            logger.info(
-                                f"No messages found in the last {filter_value} days for {chat_name}.")
-                        elif filter_type == "specific_date":
-                            logger.info(
-                                f"No messages found on {filter_value} for {chat_name}.")
-                    return result
-                except Exception as e:
-                    logger.error(f"Error fetching messages: {e}")
-                    raise
-
-            task = asyncio.ensure_future(fetch_coro())
+            task = asyncio.ensure_future(self.fetch_coro(
+                chat_id, chat_name, filter_type, filter_value))  # Use the async coroutine
             task.add_done_callback(self.display_messages_in_tab)
 
     def display_messages_in_tab(self, task):

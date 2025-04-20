@@ -1,10 +1,10 @@
-import requests
+import aiohttp  # Replace requests with aiohttp for async HTTP requests
 from config import OPENROUTER_API_KEY
 
 
-def summarize_text(messages):
+async def summarize_text(messages):
     """
-    Summarizes and analyzes a list of messages using DeepSeek via OpenRouter API.
+    Summarizes and analyzes a list of messages using DeepSeek via OpenRouter API asynchronously.
 
     Args:
         messages (list): A list of message texts to summarize and analyze.
@@ -43,33 +43,38 @@ def summarize_text(messages):
     }
 
     try:
-        # Send request to OpenRouter API
-        response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()  # Raise error for unsuccessful requests
+        # Use aiohttp for asynchronous HTTP request
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                response.raise_for_status()  # Raise error for unsuccessful requests
+                data = await response.json()
 
         # Extract and clean the summary
-        summary = response.json()["choices"][0]["message"]["content"].strip()
+        summary = data["choices"][0]["message"]["content"].strip()
 
-        # Ensure the summary is a single complete paragraph ending with proper punctuation.
+        # Ensure the summary is a single complete paragraph ending with proper punctuation
         if not summary.endswith('.'):
             summary += "."
         return summary
 
-    except requests.exceptions.RequestException as e:
-        return "API error: Unable to summarize messages."
+    except aiohttp.ClientError as e:
+        return f"API error: Unable to summarize messages due to {str(e)}."
     except KeyError:
         return "API response parsing error."
-    except Exception:
-        return "An unexpected error occurred during summarization."
+    except Exception as e:
+        return f"An unexpected error occurred during summarization: {str(e)}."
 
-
-# Optional test function
+# Optional test function (for CLI testing, not used in GUI)
 if __name__ == "__main__":
+    import asyncio
     test_messages = [
         "سلام، امروز چطوری؟",
         "خوبم، مرسی! تو چطور؟",
         "عالیم، فقط دارم استراحت می‌کنم. برنامه‌ای داری؟",
         "چیز خاصی نه، شاید بعداً یه فیلم ببینم."
     ]
-    summary = summarize_text(test_messages)
-    print("Summary:", summary)
+
+    async def test():
+        summary = await summarize_text(test_messages)
+        print("Summary:", summary)
+    asyncio.run(test())
