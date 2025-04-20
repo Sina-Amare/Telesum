@@ -36,6 +36,7 @@ class TelegramManager:
         self.client = TelegramClient(session_path, api_id, api_hash)
         self.me = None  # To store current user info
         self.parent = parent  # Reference to parent widget for GUI dialogs
+        self.updates_enabled = True  # Track update state
 
     async def connect(self):
         """Establish a connection to Telegram servers."""
@@ -67,10 +68,24 @@ class TelegramManager:
             logger.error(f"Error logging into Telegram: {e}")
             raise
 
+    async def toggle_updates(self, enable=True):
+        """Enable or disable background updates."""
+        if enable and not self.updates_enabled:
+            # Re-enable updates
+            self.updates_enabled = True
+            logger.info("Background updates enabled.")
+        elif not enable and self.updates_enabled:
+            # Disable updates
+            self.updates_enabled = False
+            logger.info("Background updates disabled.")
+
     async def fetch_chats(self):
+        """Retrieve private chats from Telegram with adaptive rate limiting."""
         logger.info("Loading chat list")
         chats = []
         try:
+            # Disable background updates during fetch
+            await self.toggle_updates(False)
             async for dialog in self.client.iter_dialogs():
                 logger.debug(
                     f"Processing dialog: {dialog.name}, is_user={dialog.is_user}, entity_type={type(dialog.entity)}")
@@ -79,18 +94,28 @@ class TelegramManager:
                         (dialog.id, dialog.name, dialog.entity.username))
                     logger.debug(
                         f"Added chat: {dialog.name} (ID: {dialog.id})")
-                    await asyncio.sleep(0.5)  # Delay to respect API limits
             logger.info(f"Retrieved {len(chats)} private chats from Telegram")
             return chats
+        except FloodWaitError as e:
+            wait_time = e.seconds
+            logger.warning(f"FloodWaitError: Waiting for {wait_time} seconds.")
+            await asyncio.sleep(wait_time)
+            # Retry after waiting
+            return await self.fetch_chats()
         except Exception as e:
             logger.error(f"Error loading chats: {e}")
             return []
+        finally:
+            # Re-enable updates after fetch
+            await self.toggle_updates(True)
 
     async def fetch_new_chats(self, last_update_timestamp=None):
-        """Retrieve only new or updated private chats since the last update."""
+        """Retrieve only new or updated private chats since the last update with adaptive rate limiting."""
         logger.info("Checking for new or updated chats")
         new_chats = []
         try:
+            # Disable background updates during fetch
+            await self.toggle_updates(False)
             async for dialog in self.client.iter_dialogs():
                 if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
                     dialog_date = dialog.date
@@ -102,15 +127,25 @@ class TelegramManager:
                     if last_update_timestamp is None or dialog_date > last_update_timestamp:
                         new_chats.append(
                             (dialog.id, dialog.name, dialog.entity.username))
-                    await asyncio.sleep(0.5)  # Delay to respect API limits
+                        logger.debug(
+                            f"Added new chat: {dialog.name} (ID: {dialog.id})")
             if new_chats:
                 logger.info(f"Found {len(new_chats)} new or updated chats")
             else:
                 logger.info("No new or updated chats found")
             return new_chats
+        except FloodWaitError as e:
+            wait_time = e.seconds
+            logger.warning(f"FloodWaitError: Waiting for {wait_time} seconds.")
+            await asyncio.sleep(wait_time)
+            # Retry after waiting
+            return await self.fetch_new_chats(last_update_timestamp)
         except Exception as e:
             logger.error(f"Error checking new chats: {e}")
             return []
+        finally:
+            # Re-enable updates after fetch
+            await self.toggle_updates(True)
 
     async def safe_iter_messages(self, chat_id, limit=None, offset_id=0, offset_date=None):
         """Safely iterate over messages with adaptive rate limiting."""
@@ -129,8 +164,9 @@ class TelegramManager:
                     yield msg
                 break
             except FloodWaitError as e:
-                logger.warning(f"Rate limit hit, waiting {e.seconds} seconds")
-                await asyncio.sleep(e.seconds)
+                wait_time = e.seconds
+                logger.warning(f"Rate limit hit, waiting {wait_time} seconds")
+                await asyncio.sleep(wait_time)
             except Exception as e:
                 logger.error(f"Error in safe_iter_messages: {e}")
                 raise
@@ -161,6 +197,8 @@ class TelegramManager:
                 f"Fetching messages from Telegram for chat ID {chat_id}")
 
         try:
+            # Disable background updates during fetch
+            await self.toggle_updates(False)
             if filter_type == "recent_messages":
                 # Use the smallest message_id from db_messages as offset_id
                 offset_id = 0
@@ -178,7 +216,6 @@ class TelegramManager:
                         (sender_name, message_content, message_date, message.id))
                     logger.debug(
                         f"Fetched message ID {message.id} for chat ID {chat_id}")
-                    await asyncio.sleep(0.5)
 
             elif filter_type == "recent_days":
                 min_date = self._make_aware_datetime(
@@ -203,7 +240,6 @@ class TelegramManager:
                             logger.debug(
                                 f"Fetched message ID {message.id} for chat ID {chat_id}")
                         last_id = message.id
-                        await asyncio.sleep(0.5)
                     if batch:
                         messages.extend(batch)
                     if last_message_date and last_message_date < min_date:
@@ -237,7 +273,6 @@ class TelegramManager:
                             logger.debug(
                                 f"Fetched message ID {message.id} for chat ID {chat_id}")
                         last_id = message.id
-                        await asyncio.sleep(0.5)
                     if batch:
                         messages.extend(batch)
                     if not batch or message_count >= 1000:
@@ -246,6 +281,9 @@ class TelegramManager:
         except Exception as e:
             logger.error(f"Error fetching messages from Telegram: {e}")
             return None
+        finally:
+            # Re-enable updates after fetch
+            await self.toggle_updates(True)
 
         # Ensure all timestamps are timezone-aware before combining
         combined_messages = []

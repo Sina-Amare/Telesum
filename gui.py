@@ -16,6 +16,7 @@ import pytz
 import logging
 import os
 import time
+import concurrent.futures
 
 # Set up logging
 logging.basicConfig(
@@ -168,7 +169,7 @@ class MessageDialog(QWidget):
 
         self.setLayout(layout)
 
-    async def fetch_coro(self):  # Changed to async and renamed for clarity
+    async def fetch_coro(self):
         try:
             # Check database messages first
             from database import load_messages
@@ -193,7 +194,7 @@ class MessageDialog(QWidget):
                     local_time = timestamp.astimezone(self.user_timezone)
                     result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
                 message_texts = [msg for _, msg, _, _ in messages]
-                summary = await summarize_text(message_texts)  # Now awaited
+                summary = await summarize_text(message_texts)
                 result += "=== Summary ===\n" + summary + "\n"
             else:
                 result = "No messages found."
@@ -227,8 +228,7 @@ class MessageDialog(QWidget):
             logger.info(
                 f"Checking database for messages in {self.chat_name} on {self.filter_value}...")
 
-        task = asyncio.ensure_future(
-            self.fetch_coro())  # Use the async coroutine
+        task = asyncio.ensure_future(self.fetch_coro())
         task.add_done_callback(self.display_messages)
 
     def display_messages(self, task):
@@ -248,6 +248,8 @@ class MainWindow(QMainWindow):
     def __init__(self, loop):
         super().__init__()
         self.loop = loop
+        self.executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2)  # Thread pool for heavy tasks
         self.setWindowTitle("TeleSum - Telegram Chat Manager")
         self.setMinimumSize(900, 600)
         self.telegram = None
@@ -377,6 +379,9 @@ class MainWindow(QMainWindow):
         self.messages_progress = QProgressBar()
         self.messages_progress.setVisible(False)
         layout.addWidget(self.messages_progress)
+
+        self.messages_status_label = QLabel("Ready to fetch messages.")
+        layout.addWidget(self.messages_status_label)
 
         self.messages_tab.setLayout(layout)
 
@@ -555,10 +560,11 @@ class MainWindow(QMainWindow):
 
     def fetch_initial_chats(self):
         logger.info("Fetching initial chat list after login...")
+        self.statusBar().showMessage("Fetching chats...")
 
         async def fetch_coro():
             try:
-                # Always try to fetch from Telegram
+                # Since fetch_chats is already async, we can call it directly
                 chats_from_telegram = await self.telegram.fetch_chats()
                 if chats_from_telegram:
                     save_chats(chats_from_telegram, self.user_phone)
@@ -592,10 +598,12 @@ class MainWindow(QMainWindow):
 
     def update_chats(self):
         logger.info("Updating chat list...")
+        self.statusBar().showMessage("Updating chats...")
 
         async def fetch_chats_coro():
             try:
                 last_update = load_last_update_timestamp(self.user_phone)
+                # Since fetch_new_chats is already async, we can call it directly
                 new_chats = await self.telegram.fetch_new_chats(last_update)
                 if new_chats:
                     existing_chats = load_chats(self.user_phone)
@@ -622,19 +630,45 @@ class MainWindow(QMainWindow):
             self.chats = chats
             self.chats_list.clear()
             self.messages_chat_combo.clear()
-            for chat_id, chat_name, username in chats:
-                item_text = f"{chat_name} (ID: {chat_id})"
-                if username:
-                    item_text += f" (@{username})"
-                self.chats_list.addItem(item_text)
-                self.messages_chat_combo.addItem(item_text)
-            self.statusBar().showMessage(f"Loaded {len(chats)} chats")
-            logger.info(f"Displayed {len(chats)} chats in the GUI.")
+
+            # Lazy load chats into QListWidget and QComboBox in batches
+            batch_size = 20  # Number of chats to load per batch
+            self.chat_batch = chats
+            self.current_batch_index = 0
+
+            def load_next_batch():
+                start = self.current_batch_index
+                end = min(start + batch_size, len(self.chat_batch))
+                for i in range(start, end):
+                    chat_id, chat_name, username = self.chat_batch[i]
+                    item_text = f"{chat_name} (ID: {chat_id})"
+                    if username:
+                        item_text += f" (@{username})"
+                    self.chats_list.addItem(item_text)
+                    self.messages_chat_combo.addItem(item_text)
+                self.current_batch_index = end
+
+                # Update status bar with progress
+                self.statusBar().showMessage(
+                    f"Loaded {self.current_batch_index} of {len(self.chat_batch)} chats")
+
+                if self.current_batch_index < len(self.chat_batch):
+                    # Load next batch after 50ms
+                    QTimer.singleShot(50, load_next_batch)
+                else:
+                    self.statusBar().showMessage(
+                        f"Loaded {len(self.chat_batch)} chats")
+                    logger.info(
+                        f"Displayed {len(self.chat_batch)} chats in the GUI.")
+
+            # Start loading the first batch
+            load_next_batch()
+
         except Exception as e:
             self.statusBar().showMessage("Error occurred")
             QMessageBox.critical(self, "Error", f"Failed to load chats: {e}")
 
-    async def fetch_coro(self, chat_id, chat_name, filter_type, filter_value):  # Changed to async
+    async def fetch_coro(self, chat_id, chat_name, filter_type, filter_value):
         try:
             # Check database messages first
             from database import load_messages
@@ -649,6 +683,7 @@ class MainWindow(QMainWindow):
                     logger.info(
                         "Incomplete messages for this date. Fetching from Telegram...")
 
+            # Directly call the async get_messages method
             messages = await self.telegram.get_messages(chat_id, filter_type, filter_value, self.user_timezone, self.user_phone)
             if messages is None:
                 return None
@@ -659,7 +694,7 @@ class MainWindow(QMainWindow):
                     local_time = timestamp.astimezone(self.user_timezone)
                     result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
                 message_texts = [msg for _, msg, _, _ in messages]
-                summary = await summarize_text(message_texts)  # Now awaited
+                summary = await summarize_text(message_texts)
                 result += "=== Summary ===\n" + summary + "\n"
             else:
                 result = "No messages found."
@@ -696,6 +731,7 @@ class MainWindow(QMainWindow):
             self.messages_progress.setVisible(True)
             self.messages_progress.setRange(0, 0)
             self.messages_display.clear()
+            self.messages_status_label.setText("Fetching messages...")
 
             # Log the start of message fetching
             if filter_type == "recent_messages":
@@ -708,7 +744,7 @@ class MainWindow(QMainWindow):
                     f"Checking database for messages in {chat_name} on {filter_value}...")
 
             task = asyncio.ensure_future(self.fetch_coro(
-                chat_id, chat_name, filter_type, filter_value))  # Use the async coroutine
+                chat_id, chat_name, filter_type, filter_value))
             task.add_done_callback(self.display_messages_in_tab)
 
     def display_messages_in_tab(self, task):
@@ -717,9 +753,13 @@ class MainWindow(QMainWindow):
             result = task.result()
             if result:
                 self.messages_display.setText(result)
+                self.messages_status_label.setText(
+                    "Messages fetched successfully.")
             else:
                 self.messages_display.setText("No messages found.")
+                self.messages_status_label.setText("No messages found.")
         except Exception as e:
+            self.messages_status_label.setText("Failed to fetch messages.")
             QMessageBox.critical(
                 self, "Error", f"Failed to fetch messages: {e}")
 
@@ -959,6 +999,7 @@ class MainWindow(QMainWindow):
 
         async def refresh_coro():
             try:
+                # Since fetch_chats is already async, we can call it directly
                 chats = await self.telegram.fetch_chats()
                 save_chats(chats, self.user_phone)
                 save_last_update_timestamp(self.user_phone)
@@ -989,8 +1030,23 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     logger.error(f"Error disconnecting: {e}")
 
+            # Schedule the disconnect task without blocking the event loop
             task = asyncio.ensure_future(disconnect_coro())
-            self.loop.run_until_complete(task)
+            # Use a callback to log when the task is done
+
+            def on_disconnect_done(future):
+                try:
+                    future.result()  # This will raise any exceptions caught during disconnect
+                except Exception as e:
+                    logger.error(f"Error in disconnect task: {e}")
+
+            task.add_done_callback(on_disconnect_done)
+            # Allow some time for the task to complete, but don't block the GUI
+            # Give 1 second for the task to finish
+            QTimer.singleShot(1000, lambda: None)
+
+        # Shut down the executor
+        self.executor.shutdown(wait=True)
         event.accept()
 
 
