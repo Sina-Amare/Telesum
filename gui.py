@@ -130,112 +130,6 @@ class FetchMessagesDialog(QDialog):
         self.accept()
 
 
-class MessageDialog(QWidget):
-    def __init__(self, telegram, chat_id, chat_name, user_timezone, user_phone, filter_type, filter_value, parent=None):
-        super().__init__(parent)
-        self.telegram = telegram
-        self.chat_id = chat_id
-        self.chat_name = chat_name
-        self.user_timezone = user_timezone
-        self.user_phone = user_phone
-        self.filter_type = filter_type
-        self.filter_value = filter_value
-        self.setWindowTitle(f"Messages for {chat_name}")
-        self.setMinimumSize(700, 500)
-        self.init_ui()
-        self.fetch_messages()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        header_label = QLabel(f"Messages for {self.chat_name}")
-        header_label.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #D5D5D5;")
-        layout.addWidget(header_label)
-
-        self.messages_text = QTextEdit()
-        self.messages_text.setReadOnly(True)
-        layout.addWidget(self.messages_text)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setRange(0, 100)
-        layout.addWidget(self.progress_bar)
-
-        close_button = QPushButton("Close")
-        close_button.clicked.connect(self.close)
-        layout.addWidget(close_button, alignment=Qt.AlignmentFlag.AlignRight)
-
-        self.setLayout(layout)
-
-    async def fetch_coro(self):
-        logger.info(
-            f"Starting fetch_coro for chat: {self.chat_name} (ID: {self.chat_id})")
-        try:
-            # Always fetch new messages from Telegram
-            logger.info("Fetching messages from Telegram...")
-            messages = await self.telegram.get_messages(
-                self.chat_id, self.filter_type, self.filter_value, self.user_timezone, self.user_phone
-            )
-            logger.info(
-                f"get_messages returned {len(messages) if messages else 0} messages.")
-
-            if messages is None:
-                logger.warning("get_messages returned None.")
-                return "No messages found."
-
-            result = ""
-            if messages:
-                logger.info(
-                    f"Processing {len(messages)} messages for display...")
-                for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
-                    local_time = timestamp.astimezone(self.user_timezone)
-                    result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
-                message_texts = [msg for _, msg, _, _ in messages]
-                logger.info("Summarizing messages...")
-                summary = await summarize_text(message_texts)
-                result += "=== Summary ===\n" + summary + "\n"
-            else:
-                result = "No messages found."
-                logger.info("No messages found after processing.")
-            return result
-        except Exception as e:
-            logger.error(f"Error in fetch_coro: {e}")
-            raise
-
-    def fetch_messages(self):
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setRange(0, 0)  # Indeterminate for now
-        self.messages_text.clear()
-
-        if self.filter_type == "recent_messages":
-            logger.info(f"Fetching recent messages for {self.chat_name}...")
-        elif self.filter_type == "recent_days":
-            logger.info(
-                f"Fetching messages in {self.chat_name} for the last {self.filter_value} days...")
-        elif self.filter_type == "specific_date":
-            logger.info(
-                f"Fetching messages in {self.chat_name} on {self.filter_value}...")
-
-        task = asyncio.ensure_future(self.fetch_coro())
-        task.add_done_callback(self.display_messages)
-
-    def display_messages(self, task):
-        self.progress_bar.setVisible(False)
-        try:
-            result = task.result()
-            if result:
-                self.messages_text.setText(result)
-            else:
-                self.messages_text.setText("No messages found.")
-        except Exception as e:
-            logger.error(f"Error displaying messages: {e}")
-            QMessageBox.critical(
-                self, "Error", f"Failed to fetch messages: {e}")
-
-
 class MainWindow(QMainWindow):
     def __init__(self, loop):
         super().__init__()
@@ -247,8 +141,10 @@ class MainWindow(QMainWindow):
         self.user_phone = None
         self.user_timezone = None
         self.chats = []
-        self.is_fetching = False  # Track fetching state
-        self.fetch_task = None  # Store the fetch task for cancellation
+        self.is_fetching = False
+        self.fetch_task = None
+        self.current_chat_id = None  # Track the currently viewed chat in Search History
+        self.current_chat_name = None
         self.init_ui()
 
     def init_ui(self):
@@ -274,10 +170,6 @@ class MainWindow(QMainWindow):
         self.search_history_tab = QWidget()
         self.setup_search_history_tab()
         self.tabs.addTab(self.search_history_tab, "Search History")
-
-        self.manage_history_tab = QWidget()
-        self.setup_manage_history_tab()
-        self.tabs.addTab(self.manage_history_tab, "Manage History")
 
         self.refresh_tab = QWidget()
         self.setup_refresh_tab()
@@ -381,7 +273,7 @@ class MainWindow(QMainWindow):
 
         self.messages_progress = QProgressBar()
         self.messages_progress.setVisible(False)
-        self.messages_progress.setRange(0, 100)  # Set range for percentage
+        self.messages_progress.setRange(0, 100)
         self.messages_progress.setValue(0)
         layout.addWidget(self.messages_progress)
 
@@ -410,7 +302,6 @@ class MainWindow(QMainWindow):
         search_frame.setLayout(search_layout)
         layout.addWidget(search_frame)
 
-        # Add a list widget to display search results
         self.search_results_list = QListWidget()
         self.search_results_list.itemClicked.connect(
             self.on_search_result_clicked)
@@ -419,32 +310,56 @@ class MainWindow(QMainWindow):
         self.search_tab.setLayout(layout)
 
     def setup_search_history_tab(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        self.history_layout = QVBoxLayout()
+        self.history_layout.setContentsMargins(20, 20, 20, 20)
+        self.history_layout.setSpacing(15)
 
+        # List of users with saved messages
         self.history_list = QListWidget()
-        layout.addWidget(self.history_list)
+        self.history_layout.addWidget(self.history_list)
 
         button_layout = QHBoxLayout()
         view_button = QPushButton("View Messages")
         view_button.clicked.connect(self.view_history_messages)
         button_layout.addWidget(view_button)
-        layout.addLayout(button_layout)
+        self.history_layout.addLayout(button_layout)
 
-        self.search_history_tab.setLayout(layout)
+        # Widgets for displaying messages (hidden initially)
+        self.messages_frame = QFrame()
+        self.messages_frame.setVisible(False)
+        messages_layout = QVBoxLayout()
 
-    def setup_manage_history_tab(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        self.history_messages_display = QTextEdit()
+        self.history_messages_display.setReadOnly(True)
+        messages_layout.addWidget(self.history_messages_display)
 
-        delete_messages_button = QPushButton("Delete Messages for a Chat")
-        delete_messages_button.clicked.connect(self.delete_chat_messages)
-        layout.addWidget(delete_messages_button)
+        # Buttons for managing messages
+        manage_buttons_layout = QHBoxLayout()
+        delete_recent_button = QPushButton("Delete Recent Messages")
+        delete_recent_button.clicked.connect(self.delete_recent_messages)
+        manage_buttons_layout.addWidget(delete_recent_button)
 
-        layout.addStretch()
-        self.manage_history_tab.setLayout(layout)
+        delete_date_button = QPushButton("Delete Messages from a Date")
+        delete_date_button.clicked.connect(self.delete_messages_from_date)
+        manage_buttons_layout.addWidget(delete_date_button)
+
+        delete_all_button = QPushButton("Delete All Messages")
+        delete_all_button.clicked.connect(self.delete_all_messages)
+        manage_buttons_layout.addWidget(delete_all_button)
+
+        back_button = QPushButton("Back to List")
+        back_button.clicked.connect(self.back_to_history_list)
+        manage_buttons_layout.addWidget(back_button)
+
+        messages_layout.addLayout(manage_buttons_layout)
+        self.messages_frame.setLayout(messages_layout)
+        self.history_layout.addWidget(self.messages_frame)
+
+        self.history_status_label = QLabel(
+            "Select a chat to view saved messages.")
+        self.history_layout.addWidget(self.history_status_label)
+
+        self.search_history_tab.setLayout(self.history_layout)
 
     def setup_refresh_tab(self):
         layout = QVBoxLayout()
@@ -501,22 +416,27 @@ class MainWindow(QMainWindow):
 
     def update_search_history(self):
         self.history_list.clear()
-        # Get all chats
         chats = load_chats(self.user_phone)
         if not chats:
             self.history_list.addItem("No chats found.")
             return
 
-        # Check which chats have messages in the database
+        found = False
         for chat_id, chat_name, username in chats:
             messages, _, _ = load_messages(
                 chat_id, "recent_messages", 1, self.user_phone)
             if messages:
+                found = True
                 display_text = f"{chat_name} (ID: {chat_id})"
                 if username:
                     display_text += f" (@{username})"
                 self.history_list.addItem(display_text)
                 logger.info(f"Added {chat_name} to Search History list")
+
+        if not found:
+            self.history_list.addItem("No chats with saved messages found.")
+            self.history_status_label.setText(
+                "No chats with saved messages found.")
 
     def connect_telegram(self):
         self.user_phone = self.phone_input.text().strip()
@@ -671,17 +591,15 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to load chats: {e}")
 
     async def update_progress(self, progress):
-        """Update the progress bar with the given percentage."""
         def set_progress():
             self.messages_progress.setValue(int(progress))
-            QApplication.processEvents()  # Ensure the UI updates
+            QApplication.processEvents()
         await asyncio.get_event_loop().run_in_executor(None, set_progress)
 
     async def fetch_coro(self, chat_id, chat_name, filter_type, filter_value):
         logger.info(
             f"Starting fetch_coro for chat: {chat_name} (ID: {chat_id})")
         try:
-            # Always fetch messages from Telegram to ensure we get the latest
             logger.info("Fetching messages from Telegram...")
             messages = await self.telegram.get_messages(
                 chat_id, filter_type, filter_value, self.user_timezone, self.user_phone,
@@ -733,7 +651,6 @@ class MainWindow(QMainWindow):
         chat_name = chat[1]
         username = chat[2]
 
-        # Save to search history
         search_term = username if username else chat_name
         save_search_history(search_term, self.user_phone)
         self.update_search_history()
@@ -744,7 +661,7 @@ class MainWindow(QMainWindow):
             filter_type, filter_value = fetch_dialog.result
             self.is_fetching = True
             self.messages_progress.setVisible(True)
-            self.messages_progress.setValue(0)  # Reset progress bar
+            self.messages_progress.setValue(0)
             self.cancel_button.setVisible(True)
             self.messages_display.clear()
             self.messages_status_label.setText("Fetching messages...")
@@ -842,12 +759,10 @@ class MainWindow(QMainWindow):
         if "No private chat found" in selected_text:
             return
 
-        # Extract chat_id from the selected item
         chat_id_str = selected_text.split("(ID: ")[1].split(")")[0]
         chat_id = int(chat_id_str)
         chat_name = selected_text.split(" (ID: ")[0]
 
-        # Find the chat in self.chats to get the index
         chat_index = None
         for i, (c_id, c_name, _) in enumerate(self.chats):
             if c_id == chat_id and c_name == chat_name:
@@ -866,119 +781,126 @@ class MainWindow(QMainWindow):
             return
 
         selected_text = selected_item.text()
+        if "No chats" in selected_text:
+            self.history_status_label.setText(
+                "No chats with saved messages found.")
+            return
+
         chat_id_str = selected_text.split("(ID: ")[1].split(")")[0]
         chat_id = int(chat_id_str)
         chat_name = selected_text.split(" (ID: ")[0]
 
-        # Display all messages from the database for this chat
-        messages, _, _ = load_messages(
-            chat_id, "recent_messages", 5000, self.user_phone)
-        if not messages:
-            QMessageBox.information(
-                self, "Info", "No saved messages found for this chat.")
-            return
+        self.current_chat_id = chat_id
+        self.current_chat_name = chat_name
 
-        # Display the messages in a new dialog
-        message_dialog = MessageDialog(
-            self.telegram, chat_id, chat_name, self.user_timezone, self.user_phone, "recent_messages", 5000, self)
-        message_dialog.show()
-
-    def delete_chat_messages(self):
-        chats = load_chats(self.user_phone)
-        chat_items = []
-        chat_ids = []
-        chat_names = []
-        for chat_id, chat_name, username in chats:
+        try:
             messages, _, _ = load_messages(
-                chat_id, "recent_messages", 1, self.user_phone)
-            if messages:
-                display_text = f"{chat_name} (ID: {chat_id})"
-                if username:
-                    display_text += f" (@{username})"
-                chat_items.append(display_text)
-                chat_ids.append(chat_id)
-                chat_names.append(chat_name)
+                chat_id, "recent_messages", 5000, self.user_phone)
+            self.history_list.setVisible(False)
+            self.messages_frame.setVisible(True)
+            self.history_messages_display.clear()
 
-        if not chat_items:
-            QMessageBox.information(
-                self, "Info", "No chats with messages to delete.")
-            logger.info(
-                "No chats with messages to select from for deleting messages.")
+            if messages:
+                result = ""
+                for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
+                    local_time = timestamp.astimezone(self.user_timezone)
+                    result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
+                self.history_messages_display.setText(result)
+                self.history_status_label.setText(
+                    f"Showing {len(messages)} saved messages for {chat_name}.")
+            else:
+                self.history_messages_display.setText(
+                    "No saved messages found for this chat.")
+                self.history_status_label.setText("No saved messages found.")
+        except Exception as e:
+            logger.error(f"Error loading messages from database: {e}")
+            self.history_messages_display.setText("Failed to load messages.")
+            self.history_status_label.setText("Failed to load messages.")
+            QMessageBox.critical(
+                self, "Error", f"Failed to load messages: {e}")
+
+    def back_to_history_list(self):
+        self.messages_frame.setVisible(False)
+        self.history_list.setVisible(True)
+        self.current_chat_id = None
+        self.current_chat_name = None
+        self.history_status_label.setText(
+            "Select a chat to view saved messages.")
+        self.update_search_history()
+
+    def delete_recent_messages(self):
+        if not self.current_chat_id:
+            QMessageBox.warning(self, "Error", "No chat selected.")
             return
 
-        item, ok = QInputDialog.getItem(
-            self, "Select Chat", "Select chat to delete messages:", chat_items, 0, False)
-        if ok and item:
-            chat_index = chat_items.index(item)
-            chat_id = chat_ids[chat_index]
-            chat_name = chat_names[chat_index]
+        count, ok = QInputDialog.getInt(
+            self, "Input", "Enter number of recent messages to delete:", 10, 1)
+        if ok:
+            reply = QMessageBox.question(self, "Confirm", f"Delete the last {count} messages for {self.current_chat_name}?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                deleted_count = delete_messages(
+                    self.current_chat_id, self.user_phone, num_messages=count)
+                QMessageBox.information(
+                    self, "Result", f"Deleted {deleted_count} messages.")
+                logger.info(
+                    f"Deleted {deleted_count} recent messages for {self.current_chat_name}.")
+                # Refresh messages
+                self.view_history_messages()
+                # Check if there are any messages left
+                messages, _, _ = load_messages(
+                    self.current_chat_id, "recent_messages", 1, self.user_phone)
+                if not messages:
+                    self.back_to_history_list()
 
+    def delete_messages_from_date(self):
+        if not self.current_chat_id:
+            QMessageBox.warning(self, "Error", "No chat selected.")
+            return
+
+        date, ok = QInputDialog.getText(
+            self, "Input", "Enter date (e.g., 10 March 2025):")
+        if ok:
+            try:
+                datetime.strptime(date, "%d %B %Y")
+                reply = QMessageBox.question(self, "Confirm", f"Delete messages from {date} for {self.current_chat_name}?",
+                                             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                if reply == QMessageBox.StandardButton.Yes:
+                    deleted_count = delete_messages(
+                        self.current_chat_id, self.user_phone, specific_date=date)
+                    QMessageBox.information(
+                        self, "Result", f"Deleted {deleted_count} messages.")
+                    logger.info(
+                        f"Deleted {deleted_count} messages from {date} for {self.current_chat_name}.")
+                    # Refresh messages
+                    self.view_history_messages()
+                    # Check if there are any messages left
+                    messages, _, _ = load_messages(
+                        self.current_chat_id, "recent_messages", 1, self.user_phone)
+                    if not messages:
+                        self.back_to_history_list()
+            except ValueError:
+                QMessageBox.warning(
+                    self, "Input Error", "Invalid date format. Use 'DD Month YYYY'.")
+                logger.error(
+                    "Invalid date format entered for message deletion.")
+
+    def delete_all_messages(self):
+        if not self.current_chat_id:
+            QMessageBox.warning(self, "Error", "No chat selected.")
+            return
+
+        reply = QMessageBox.question(self, "Confirm", f"Delete all messages for {self.current_chat_name}?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            deleted_count = delete_messages(
+                self.current_chat_id, self.user_phone)
+            QMessageBox.information(
+                self, "Result", f"Deleted {deleted_count} messages.")
             logger.info(
-                f"Selected chat for deletion: {chat_name} (ID: {chat_id})")
-
-            options = [
-                "Delete a specific number of recent messages",
-                "Delete messages from a specific date",
-                "Delete all messages"
-            ]
-            option, ok = QInputDialog.getItem(
-                self, "Delete Messages", f"Select deletion option for {chat_name}:", options, 0, False)
-            if ok and option:
-                if option.startswith("Delete a specific number"):
-                    count, ok = QInputDialog.getInt(
-                        self, "Input", "Enter number of recent messages to delete:", 10, 1)
-                    if ok:
-                        reply = QMessageBox.question(self, "Confirm", f"Delete the last {count} messages for {chat_name}?",
-                                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                        if reply == QMessageBox.StandardButton.Yes:
-                            deleted_count = delete_messages(
-                                chat_id, self.user_phone, num_messages=count)
-                            QMessageBox.information(
-                                self, "Result", f"Deleted {deleted_count} messages.")
-                            logger.info(
-                                f"Deleted {deleted_count} recent messages for {chat_name}.")
-                            self.update_search_history()
-                        else:
-                            logger.info(
-                                f"Deletion of {count} recent messages for {chat_name} canceled.")
-                elif option.startswith("Delete messages from"):
-                    date, ok = QInputDialog.getText(
-                        self, "Input", "Enter date (e.g., 10 March 2025):")
-                    if ok:
-                        try:
-                            datetime.strptime(date, "%d %B %Y")
-                            reply = QMessageBox.question(self, "Confirm", f"Delete messages from {date} for {chat_name}?",
-                                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                            if reply == QMessageBox.StandardButton.Yes:
-                                deleted_count = delete_messages(
-                                    chat_id, self.user_phone, specific_date=date)
-                                QMessageBox.information(
-                                    self, "Result", f"Deleted {deleted_count} messages.")
-                                logger.info(
-                                    f"Deleted {deleted_count} messages from {date} for {chat_name}.")
-                                self.update_search_history()
-                            else:
-                                logger.info(
-                                    f"Deletion of messages from {date} for {chat_name} canceled.")
-                        except ValueError:
-                            QMessageBox.warning(
-                                self, "Input Error", "Invalid date format. Use 'DD Month YYYY'.")
-                            logger.error(
-                                "Invalid date format entered for message deletion.")
-                elif option.startswith("Delete all"):
-                    reply = QMessageBox.question(self, "Confirm", f"Delete all messages for {chat_name}?",
-                                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                    if reply == QMessageBox.StandardButton.Yes:
-                        deleted_count = delete_messages(
-                            chat_id, self.user_phone)
-                        QMessageBox.information(
-                            self, "Result", f"Deleted {deleted_count} messages.")
-                        logger.info(
-                            f"Deleted {deleted_count} messages for {chat_name}.")
-                        self.update_search_history()
-                    else:
-                        logger.info(
-                            f"Deletion of all messages for {chat_name} canceled.")
+                f"Deleted {deleted_count} messages for {self.current_chat_name}.")
+            # Since all messages are deleted, go back to the list
+            self.back_to_history_list()
 
     def refresh_chats(self):
         self.refresh_status.setText("Refreshing chat list...")
