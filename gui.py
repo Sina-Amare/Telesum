@@ -1,3 +1,5 @@
+import os
+import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QLineEdit, QComboBox, QTextEdit, QListWidget, QInputDialog,
                              QMessageBox, QLabel, QProgressBar, QFrame, QGridLayout, QDialog, QTableWidget,
@@ -11,7 +13,7 @@ from telegram_client import TelegramManager
 from database import (setup_database, save_chats, load_chats, save_search_history, load_search_history,
                       delete_search_history_entry, delete_all_search_history, delete_messages,
                       save_last_update_timestamp, load_last_update_timestamp, load_messages,
-                      save_user_settings, load_user_settings, load_all_users, load_users_with_search_history, load_chats_with_messages)
+                      save_user_settings, load_user_settings, load_all_users, load_chats_with_messages)
 from utils import search_by_username
 from ai_processor import summarize_text
 from config import VERBOSE_LOGGING
@@ -93,8 +95,9 @@ def setup_logging(text_edit):
     logger.addHandler(queue_handler)
     logger.addHandler(stream_handler)
 
-
 # Dialog for Fetching Messages with Progress Bar and Cancel Button
+
+
 class FetchingProgressDialog(QDialog):
     def __init__(self, chat_name, parent=None):
         super().__init__(parent)
@@ -124,8 +127,9 @@ class FetchingProgressDialog(QDialog):
 
         self.setLayout(layout)
 
-
 # Updated FetchMessagesDialog init_ui to increase output box size
+
+
 class FetchMessagesDialog(QDialog):
     def __init__(self, telegram, chat_id, chat_name, user_timezone, user_phone, parent=None):
         super().__init__(parent)
@@ -240,6 +244,20 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("TeleSam - Telegram Chat Manager")
         self.setMinimumSize(1000, 700)
         self.is_dark_mode = True
+
+        # Initialize search results history and cache
+        self.search_results_history = []
+        self.cache_dir = "cache"
+        self.cache_file = os.path.join(
+            self.cache_dir, "search_results_cache.json")
+        # Create cache directory and file if they don't exist
+        os.makedirs(self.cache_dir, exist_ok=True)
+        if not os.path.exists(self.cache_file):
+            with open(self.cache_file, "w") as f:
+                json.dump([], f)
+        # Load search history from cache
+        self.load_search_history_cache()
+
         self.init_ui()
         self.apply_stylesheet()
 
@@ -454,6 +472,22 @@ class MainWindow(QMainWindow):
                 background: #F75C4C;
             }
             QPushButton[delete="true"]:pressed {
+                background: #B0291B;
+            }
+            QPushButton[delete_small="true"] {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E74C3C, stop:1 #C0392B
+                );
+                min-width: 40px;
+                min-height: 30px;
+                padding: 5px;
+                font-size: 10pt;
+            }
+            QPushButton[delete_small="true"]:hover {
+                background: #F75C4C;
+            }
+            QPushButton[delete_small="true"]:pressed {
                 background: #B0291B;
             }
             QTextEdit {
@@ -696,6 +730,22 @@ class MainWindow(QMainWindow):
             QPushButton[delete="true"]:pressed {
                 background: #B0291B;
             }
+            QPushButton[delete_small="true"] {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E74C3C, stop:1 #C0392B
+                );
+                min-width: 40px;
+                min-height: 30px;
+                padding: 5px;
+                font-size: 10pt;
+            }
+            QPushButton[delete_small="true"]:hover {
+                background: #F75C4C;
+            }
+            QPushButton[delete_small="true"]:pressed {
+                background: #B0291B;
+            }
             QTextEdit {
                 background-color: #F5F5F5;
                 color: #212121;
@@ -781,6 +831,20 @@ class MainWindow(QMainWindow):
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
         self.apply_stylesheet()
+        # Update title label style after toggling theme
+        self.title_label.setStyleSheet("""
+            font-size: 20pt;
+            font-weight: 700;
+            color: #FFFFFF;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            padding: 8px;
+            """ if self.is_dark_mode else """
+            font-size: 20pt;
+            font-weight: 700;
+            color: #212121;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            padding: 8px;
+            """)
         # Update button text based on the new mode
         self.theme_toggle_button.setText(
             "☀️ Light Mode" if self.is_dark_mode else "🌙 Dark Mode")
@@ -791,14 +855,21 @@ class MainWindow(QMainWindow):
         layout.setSpacing(20)
 
         # Title Label
-        title_label = QLabel("Login to Telegram")
+        title_label = QLabel("Welcome to Telesum")
         title_label.setStyleSheet("""
             font-size: 20pt;
             font-weight: 700;
             color: #FFFFFF;
             font-family: 'Segoe UI', 'Arial', sans-serif;
             padding: 8px;
+        """ if self.is_dark_mode else """
+            font-size: 20pt;
+            font-weight: 700;
+            color: #212121;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            padding: 8px;
         """)
+        self.title_label = title_label
         layout.addWidget(title_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Theme Toggle Button
@@ -889,10 +960,54 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(30)
 
-        self.chats_list = QListWidget()
+        self.chats_list = QTableWidget()
+        self.chats_list.setColumnCount(4)
+        self.chats_list.setHorizontalHeaderLabels(
+            ["No.", "Name", "ID", "Username"])
+        self.chats_list.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows)
+        self.chats_list.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection)
+        self.chats_list.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers)
+        self.chats_list.horizontalHeader().setStretchLastSection(True)
+        self.chats_list.setColumnWidth(0, 50)
+        self.chats_list.setColumnWidth(1, 200)
+        self.chats_list.setColumnWidth(2, 100)
+        self.chats_list.itemClicked.connect(self.on_chat_selected)
         layout.addWidget(self.chats_list)
 
         self.chats_tab.setLayout(layout)
+
+    def on_chat_selected(self, item):
+        row = item.row()
+        chat_id = int(self.chats_list.item(row, 2).text())
+        chat_name = self.chats_list.item(row, 1).text()
+        username = self.chats_list.item(row, 3).text()
+
+        found = False
+        for i, chat in enumerate(self.chats):
+            if chat[0] == chat_id:
+                found = True
+                break
+        if not found:
+            self.chats.append((chat_id, chat_name, username))
+
+        self.messages_chat_combo.clear()
+        for chat_id_, chat_name_, username_ in self.chats:
+            item_text = f"{chat_name_} (ID: {chat_id_})"
+            if username_:
+                item_text += f" (@{username_})"
+            self.messages_chat_combo.addItem(item_text)
+
+        self.messages_chat_combo.setCurrentText(
+            f"{chat_name} (ID: {chat_id})" + (f" (@{username})" if username else ""))
+
+        search_term = username if username else chat_name
+        save_search_history(search_term, self.user_phone)
+
+        self.tabs.setCurrentWidget(self.messages_tab)
+        self.fetch_chat_messages()
 
     def setup_messages_tab(self):
         self.messages_layout = QVBoxLayout()
@@ -1008,9 +1123,9 @@ class MainWindow(QMainWindow):
         search_output_layout.addWidget(search_output_label)
 
         self.search_results_table = QTableWidget()
-        self.search_results_table.setColumnCount(3)
+        self.search_results_table.setColumnCount(4)
         self.search_results_table.setHorizontalHeaderLabels(
-            ["Chat ID", "Name", "Username"])
+            ["Chat ID", "Name", "Username", "Actions"])
         self.search_results_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows)
         self.search_results_table.setSelectionMode(
@@ -1020,16 +1135,88 @@ class MainWindow(QMainWindow):
         self.search_results_table.horizontalHeader().setStretchLastSection(True)
         self.search_results_table.setColumnWidth(0, 100)
         self.search_results_table.setColumnWidth(1, 200)
+        self.search_results_table.setColumnWidth(2, 200)
+        self.search_results_table.setColumnWidth(3, 80)
         search_output_layout.addWidget(self.search_results_table)
 
+        # Buttons Section
+        button_layout = QHBoxLayout()
         fetch_messages_button = QPushButton("📥 Fetch Messages")
         fetch_messages_button.clicked.connect(self.fetch_from_search_result)
-        search_output_layout.addWidget(fetch_messages_button)
+        button_layout.addWidget(fetch_messages_button)
+
+        clear_history_button = QPushButton("🗑️ Clear Search History")
+        clear_history_button.clicked.connect(self.clear_search_history)
+        clear_history_button.setProperty("delete", True)
+        button_layout.addWidget(clear_history_button)
+
+        search_output_layout.addLayout(button_layout)
 
         search_output_frame.setLayout(search_output_layout)
         layout.addWidget(search_output_frame)
 
         self.search_tab.setLayout(layout)
+
+        # Load existing search history into the table
+        self.display_search_history()
+
+    def load_search_history_cache(self):
+        try:
+            with open(self.cache_file, "r") as f:
+                self.search_results_history = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading search history cache: {e}")
+            self.search_results_history = []
+
+    def save_search_history_cache(self):
+        try:
+            with open(self.cache_file, "w") as f:
+                json.dump(self.search_results_history, f, indent=4)
+        except Exception as e:
+            logger.error(f"Error saving search history cache: {e}")
+
+    def display_search_history(self):
+        self.search_results_table.setRowCount(len(self.search_results_history))
+        for row, chat in enumerate(self.search_results_history):
+            self.search_results_table.setItem(
+                row, 0, QTableWidgetItem(str(chat["chat_id"])))
+            self.search_results_table.setItem(
+                row, 1, QTableWidgetItem(chat["name"]))
+            self.search_results_table.setItem(row, 2, QTableWidgetItem(
+                chat["username"] if chat["username"] else ""))
+            delete_button = QPushButton("❌")
+            delete_button.setProperty("delete_small", True)
+            delete_button.clicked.connect(
+                lambda _, r=row: self.delete_search_result_entry(r))
+            self.search_results_table.setCellWidget(row, 3, delete_button)
+
+    def delete_search_result_entry(self, row):
+        chat = self.search_results_history[row]
+        reply = QMessageBox.question(
+            self, "Confirm Deletion",
+            f"Are you sure you want to delete the search result for {chat['name']} (ID: {chat['chat_id']})?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.search_results_history.pop(row)
+            self.save_search_history_cache()
+            self.display_search_history()
+
+    def clear_search_history(self):
+        if not self.search_results_history:
+            QMessageBox.information(
+                self, "Info", "Search history is already empty.")
+            return
+
+        reply = QMessageBox.question(
+            self, "Confirm Deletion",
+            "Are you sure you want to delete all search history?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.search_results_history = []
+            self.save_search_history_cache()
+            self.display_search_history()
 
     def setup_search_history_tab(self):
         self.history_layout = QVBoxLayout()
@@ -1039,22 +1226,6 @@ class MainWindow(QMainWindow):
         # Main Menu Frame (Initial View)
         self.history_main_frame = QFrame()
         main_frame_layout = QVBoxLayout()
-
-        # User Selection Section
-        user_frame = QFrame()
-        user_layout = QHBoxLayout()
-        user_layout.setSpacing(20)
-        user_label = QLabel("Select User:")
-        self.user_combo = QComboBox()
-        self.user_combo.addItem("Select a user...")
-        self.user_combo.currentIndexChanged.connect(
-            self.load_user_search_history)
-        self.user_combo.setMinimumWidth(350)
-        self.user_combo.setMinimumHeight(40)
-        user_layout.addWidget(user_label)
-        user_layout.addWidget(self.user_combo)
-        user_frame.setLayout(user_layout)
-        main_frame_layout.addWidget(user_frame)
 
         self.history_list = QListWidget()
         main_frame_layout.addWidget(self.history_list)
@@ -1066,7 +1237,7 @@ class MainWindow(QMainWindow):
         main_frame_layout.addLayout(button_layout)
 
         self.history_status_label = QLabel(
-            "Select a user to view their search history.")
+            "Chats with saved messages will load after login.")
         self.history_status_label.setStyleSheet(
             "font-size: 11pt; color: #B0BEC5; font-family: 'Segoe UI';")
         main_frame_layout.addWidget(self.history_status_label)
@@ -1116,9 +1287,6 @@ class MainWindow(QMainWindow):
         self.history_layout.addWidget(self.history_display_frame)
 
         self.search_history_tab.setLayout(self.history_layout)
-
-        # Load users with search history
-        self.load_users_with_search_history()
 
     def setup_refresh_tab(self):
         layout = QVBoxLayout()
@@ -1184,23 +1352,15 @@ class MainWindow(QMainWindow):
                 self.api_id_input.setEnabled(True)
                 self.api_hash_input.setEnabled(True)
 
-    def load_users_with_search_history(self):
-        users = load_users_with_search_history()
-        self.user_combo.clear()
-        self.user_combo.addItem("Select a user...")
-        for user_phone in users:
-            self.user_combo.addItem(user_phone)
-
     def load_user_search_history(self):
-        selected_user = self.user_combo.currentText()
-        if selected_user == "Select a user...":
+        if not self.user_phone:
             self.history_list.clear()
             self.history_status_label.setText(
-                "Select a user to view their search history.")
+                "Please login to view search history.")
             return
 
         self.history_list.clear()
-        chats = load_chats_with_messages(selected_user)
+        chats = load_chats_with_messages(self.user_phone)
         if not chats:
             self.history_list.addItem(
                 "No chats with saved messages found for this user.")
@@ -1214,7 +1374,7 @@ class MainWindow(QMainWindow):
                 display_text += f" (@{username})"
             self.history_list.addItem(display_text)
         self.history_status_label.setText(
-            f"Showing chats with messages for {selected_user}")
+            f"Showing chats with messages for {self.user_phone}")
 
     def update_logs(self):
         self.logs_text.verticalScrollBar().setValue(
@@ -1295,7 +1455,7 @@ class MainWindow(QMainWindow):
                 f"Logged in as: {user.first_name} ({user.phone})")
             self.statusBar().showMessage(f"Logged in as {user.first_name}")
             self.fetch_initial_chats()
-            self.load_users_with_search_history()
+            self.load_user_search_history()
             self.load_accounts()
             self.account_combo.setCurrentText(self.user_phone)
         except Exception as e:
@@ -1369,7 +1529,7 @@ class MainWindow(QMainWindow):
         try:
             chats = task.result()
             self.chats = chats
-            self.chats_list.clear()
+            self.chats_list.setRowCount(0)
             self.messages_chat_combo.clear()
 
             batch_size = 20
@@ -1381,10 +1541,19 @@ class MainWindow(QMainWindow):
                 end = min(start + batch_size, len(self.chat_batch))
                 for i in range(start, end):
                     chat_id, chat_name, username = self.chat_batch[i]
+                    row = self.chats_list.rowCount()
+                    self.chats_list.insertRow(row)
+                    self.chats_list.setItem(
+                        row, 0, QTableWidgetItem(str(row + 1)))
+                    self.chats_list.setItem(
+                        row, 1, QTableWidgetItem(chat_name))
+                    self.chats_list.setItem(
+                        row, 2, QTableWidgetItem(str(chat_id)))
+                    self.chats_list.setItem(
+                        row, 3, QTableWidgetItem(username if username else ""))
                     item_text = f"{chat_name} (ID: {chat_id})"
                     if username:
                         item_text += f" (@{username})"
-                    self.chats_list.addItem(item_text)
                     self.messages_chat_combo.addItem(item_text)
                 self.current_batch_index = end
 
@@ -1477,7 +1646,7 @@ class MainWindow(QMainWindow):
 
         search_term = username if username else chat_name
         save_search_history(search_term, self.user_phone)
-        self.load_users_with_search_history()
+        self.load_user_search_history()
 
         self.fetch_dialog = FetchMessagesDialog(
             self.telegram, chat_id, chat_name, self.user_timezone, self.user_phone, self)
@@ -1572,8 +1741,6 @@ class MainWindow(QMainWindow):
                                 "Search term cannot be empty.")
             return
 
-        self.search_results_table.setRowCount(0)
-
         async def search_coro():
             try:
                 matching_chats = await self.telegram.search_chat_by_id_or_name(search_term)
@@ -1588,14 +1755,18 @@ class MainWindow(QMainWindow):
     def display_search_results(self, task):
         try:
             matching_chats = task.result()
-            self.search_results_table.setRowCount(len(matching_chats))
-            for row, (chat_id, name, username) in enumerate(matching_chats):
-                self.search_results_table.setItem(
-                    row, 0, QTableWidgetItem(str(chat_id)))
-                self.search_results_table.setItem(
-                    row, 1, QTableWidgetItem(name))
-                self.search_results_table.setItem(
-                    row, 2, QTableWidgetItem(username if username else ""))
+            # Add new search results to history
+            for chat_id, name, username in matching_chats:
+                chat_entry = {
+                    "chat_id": chat_id,
+                    "name": name,
+                    "username": username
+                }
+                # Avoid duplicates
+                if chat_entry not in self.search_results_history:
+                    self.search_results_history.append(chat_entry)
+            self.save_search_history_cache()
+            self.display_search_history()
             if not matching_chats:
                 self.search_results_table.setRowCount(1)
                 self.search_results_table.setItem(
@@ -1643,7 +1814,7 @@ class MainWindow(QMainWindow):
 
         search_term = username if username else chat_name
         save_search_history(search_term, self.user_phone)
-        self.load_users_with_search_history()
+        self.load_user_search_history()
 
         self.tabs.setCurrentWidget(self.messages_tab)
         self.fetch_chat_messages()
@@ -1655,10 +1826,9 @@ class MainWindow(QMainWindow):
                                 "Please select a chat with saved messages.")
             return
 
-        selected_user = self.user_combo.currentText()
-        if selected_user == "Select a user...":
+        if not self.user_phone:
             QMessageBox.warning(self, "Selection Error",
-                                "Please select a user first.")
+                                "Please login first.")
             return
 
         item_text = selected_item.text()
@@ -1671,7 +1841,7 @@ class MainWindow(QMainWindow):
         self.current_chat_name = chat_name
 
         messages, _, _ = load_messages(
-            chat_id, "recent_messages", 100, selected_user, self.user_timezone)
+            chat_id, "recent_messages", 100, self.user_phone, self.user_timezone)
         if messages:
             result = ""
             for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
@@ -1684,7 +1854,7 @@ class MainWindow(QMainWindow):
             self.history_messages_display.setText("No messages found.")
             self.history_status_label.setText("No messages found.")
 
-            # Switch to display view
+        # Switch to display view
         self.history_main_frame.setVisible(False)
         self.history_display_frame.setVisible(True)
 
@@ -1693,10 +1863,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Selection Error", "No chat selected.")
             return
 
-        selected_user = self.user_combo.currentText()
-        if selected_user == "Select a user...":
+        if not self.user_phone:
             QMessageBox.warning(self, "Selection Error",
-                                "Please select a user first.")
+                                "Please login first.")
             return
 
         count, ok = QInputDialog.getInt(
@@ -1708,7 +1877,7 @@ class MainWindow(QMainWindow):
             self, "Confirm Deletion", f"Are you sure you want to delete the last {count} messages for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
-                self.current_chat_id, selected_user, num_messages=count)
+                self.current_chat_id, self.user_phone, num_messages=count)
             if deleted_count > 0:
                 logger.info(
                     f"Deleted {deleted_count} recent messages for {self.current_chat_name}")
@@ -1720,17 +1889,16 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self, "Info", "No recent messages found.")
             self.view_history_messages()
-            self.load_users_with_search_history()
+            self.load_user_search_history()
 
     def delete_messages_from_date(self):
         if not self.current_chat_id:
             QMessageBox.warning(self, "Selection Error", "No chat selected.")
             return
 
-        selected_user = self.user_combo.currentText()
-        if selected_user == "Select a user...":
+        if not self.user_phone:
             QMessageBox.warning(self, "Selection Error",
-                                "Please select a user first.")
+                                "Please login first.")
             return
 
         date, ok = QInputDialog.getText(
@@ -1749,7 +1917,7 @@ class MainWindow(QMainWindow):
             self, "Confirm Deletion", f"Are you sure you want to delete messages from {date} for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
-                self.current_chat_id, selected_user, specific_date=date, user_timezone=self.user_timezone)
+                self.current_chat_id, self.user_phone, specific_date=date, user_timezone=self.user_timezone)
             if deleted_count > 0:
                 logger.info(
                     f"Deleted {deleted_count} messages from {date} for {self.current_chat_name}")
@@ -1761,24 +1929,23 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self, "Info", f"No messages found from {date}.")
             self.view_history_messages()
-            self.load_users_with_search_history()
+            self.load_user_search_history()
 
     def delete_all_messages(self):
         if not self.current_chat_id:
             QMessageBox.warning(self, "Selection Error", "No chat selected.")
             return
 
-        selected_user = self.user_combo.currentText()
-        if selected_user == "Select a user...":
+        if not self.user_phone:
             QMessageBox.warning(self, "Selection Error",
-                                "Please select a user first.")
+                                "Please login first.")
             return
 
         reply = QMessageBox.question(
             self, "Confirm Deletion", f"Are you sure you want to delete all messages for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
-                self.current_chat_id, selected_user, delete_all=True)
+                self.current_chat_id, self.user_phone, delete_all=True)
             if deleted_count > 0:
                 logger.info(
                     f"Deleted all {deleted_count} messages for {self.current_chat_name}")
@@ -1790,14 +1957,14 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self, "Info", "No messages found.")
             self.view_history_messages()
-            self.load_users_with_search_history()
+            self.load_user_search_history()
 
     def back_to_history_list(self):
         self.history_display_frame.setVisible(False)
         self.history_main_frame.setVisible(True)
         self.history_messages_display.clear()
         self.history_status_label.setText(
-            f"Select a chat to view messages for {self.user_combo.currentText()}")
+            f"Select a chat to view messages for {self.user_phone if self.user_phone else 'user'}")
         self.current_chat_id = None
         self.current_chat_name = None
 
