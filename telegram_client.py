@@ -83,11 +83,20 @@ class TelegramManager:
                     logger.debug(
                         f"Processing dialog: {dialog.name}, is_user={dialog.is_user}, entity_type={type(dialog.entity)}")
                 if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
-                    chats.append(
-                        (dialog.id, dialog.name, dialog.entity.username))
+                    # Extract chat name, prioritizing first_name and last_name
+                    chat_name = dialog.name.strip() if dialog.name else ""
+                    if not chat_name:  # If dialog.name is empty, construct name from first_name/last_name
+                        first_name = dialog.entity.first_name or ""
+                        last_name = dialog.entity.last_name or ""
+                        chat_name = f"{first_name} {last_name}".strip()
+                        if not chat_name:  # If still empty, use a default
+                            chat_name = f"Unknown User (ID: {dialog.id})"
+                    # Ensure username is a string (handle None case)
+                    username = dialog.entity.username if dialog.entity.username else ""
+                    chats.append((dialog.id, chat_name, username))
                     if VERBOSE_LOGGING:
                         logger.debug(
-                            f"Added chat: {dialog.name} (ID: {dialog.id})")
+                            f"Added chat: {chat_name} (ID: {dialog.id}, Username: {username})")
             logger.info(f"Retrieved {len(chats)} private chats from Telegram")
             return chats
         except FloodWaitError as e:
@@ -109,26 +118,34 @@ class TelegramManager:
             await self.toggle_updates(False)
             async for dialog in self.client.iter_dialogs():
                 if dialog.is_user and isinstance(dialog.entity, User) and not dialog.entity.bot:
+                    # Extract chat name, prioritizing first_name and last_name
+                    chat_name = dialog.name.strip() if dialog.name else ""
+                    if not chat_name:
+                        first_name = dialog.entity.first_name or ""
+                        last_name = dialog.entity.last_name or ""
+                        chat_name = f"{first_name} {last_name}".strip()
+                        if not chat_name:
+                            chat_name = f"Unknown User (ID: {dialog.id})"
+                    # Ensure username is a string
+                    username = dialog.entity.username if dialog.entity.username else ""
                     chat_id = str(dialog.id)
-                    chat_name = dialog.name.lower()
-                    username = dialog.entity.username.lower() if dialog.entity.username else ""
+                    chat_name_lower = chat_name.lower()
+                    username_lower = username.lower() if username else ""
                     search_term_lower = search_term.lower()
 
                     if search_term_lower.startswith('@'):
                         search_term_clean = search_term_lower[1:]
-                        if search_term_clean and search_term_clean == username:
-                            chats.append(
-                                (dialog.id, dialog.name, dialog.entity.username))
+                        if search_term_clean and search_term_clean == username_lower:
+                            chats.append((dialog.id, chat_name, username))
                             if VERBOSE_LOGGING:
                                 logger.debug(
-                                    f"Found matching chat by username: {dialog.name} (ID: {dialog.id}, Username: {dialog.entity.username})")
+                                    f"Found matching chat by username: {chat_name} (ID: {dialog.id}, Username: {username})")
                     else:
-                        if search_term_lower == chat_id or search_term_lower in chat_name:
-                            chats.append(
-                                (dialog.id, dialog.name, dialog.entity.username))
+                        if search_term_lower == chat_id or search_term_lower in chat_name_lower:
+                            chats.append((dialog.id, chat_name, username))
                             if VERBOSE_LOGGING:
                                 logger.debug(
-                                    f"Found matching chat by ID or name: {dialog.name} (ID: {dialog.id})")
+                                    f"Found matching chat by ID or name: {chat_name} (ID: {dialog.id})")
 
             logger.info(
                 f"Found {len(chats)} chats matching search term: {search_term}")
@@ -159,11 +176,20 @@ class TelegramManager:
                         last_update_timestamp = last_update_timestamp.replace(
                             tzinfo=pytz.UTC)
                     if last_update_timestamp is None or dialog_date > last_update_timestamp:
-                        new_chats.append(
-                            (dialog.id, dialog.name, dialog.entity.username))
+                        # Extract chat name, prioritizing first_name and last_name
+                        chat_name = dialog.name.strip() if dialog.name else ""
+                        if not chat_name:  # If dialog.name is empty, construct name from first_name/last_name
+                            first_name = dialog.entity.first_name or ""
+                            last_name = dialog.entity.last_name or ""
+                            chat_name = f"{first_name} {last_name}".strip()
+                            if not chat_name:  # If still empty, use a default
+                                chat_name = f"Unknown User (ID: {dialog.id})"
+                        # Ensure username is a string (handle None case)
+                        username = dialog.entity.username if dialog.entity.username else ""
+                        new_chats.append((dialog.id, chat_name, username))
                         if VERBOSE_LOGGING:
                             logger.debug(
-                                f"Added new chat: {dialog.name} (ID: {dialog.id})")
+                                f"Added new chat: {chat_name} (ID: {dialog.id}, Username: {username})")
             if new_chats:
                 logger.info(f"Found {len(new_chats)} new or updated chats")
             else:
@@ -201,7 +227,7 @@ class TelegramManager:
                 logger.warning(f"Rate limit hit, waiting {wait_time} seconds")
                 await asyncio.sleep(wait_time)
             except Exception as e:
-                logger.error(f"Error in safe_iter_messages: {e}")
+                logger.error(f"Error in яsafe_iter_messages: {e}")
                 raise
 
     async def get_messages(self, chat_id, filter_type, filter_value, user_timezone, user_phone, progress_callback=None):
