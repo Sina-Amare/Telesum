@@ -324,6 +324,7 @@ class MainWindow(QMainWindow):
                 font-size: 12pt;
                 min-width: 300px;
                 min-height: 40px;
+                margin-bottom: 5px;
             }
             QLineEdit:focus {
                 border: 2px solid #9B59B6;
@@ -343,6 +344,7 @@ class MainWindow(QMainWindow):
                 font-size: 12pt;
                 min-width: 300px;
                 min-height: 40px;
+                margin-bottom: 5px;
             }
             QComboBox:hover {
                 background-color: #40406A;
@@ -414,7 +416,7 @@ class MainWindow(QMainWindow):
             QPushButton[delete="true"] {
                 background: qlineargradient(
                     x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #E74C3C, stop:1 #C0392B
+                    stop:0 #E NantucketC3C, stop:1 #C0392B
                 );
             }
             QPushButton[delete="true"]:hover {
@@ -461,7 +463,7 @@ class MainWindow(QMainWindow):
             }
             QTableWidget::item:selected {
                 background-color: #9B59B6;
-                color:s: #FFFFFF;
+                color: #FFFFFF;
             }
             QTableWidget::item:hover {
                 background-color: #40406A;
@@ -562,6 +564,7 @@ class MainWindow(QMainWindow):
                 font-size: 12pt;
                 min-width: 300px;
                 min-height: 40px;
+                margin-bottom: 5px;
             }
             QLineEdit:focus {
                 border: 2px solid #9B59B6;
@@ -581,6 +584,7 @@ class MainWindow(QMainWindow):
                 font-size: 12pt;
                 min-width: 300px;
                 min-height: 40px;
+                margin-bottom: 5px;
             }
             QComboBox:hover {
                 background-color: #FAFAFA;
@@ -775,6 +779,8 @@ class MainWindow(QMainWindow):
         container_layout.setSpacing(15)
         container_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         container_layout.setFormAlignment(Qt.AlignmentFlag.AlignLeft)
+        # Reduced vertical spacing between rows
+        container_layout.setVerticalSpacing(5)
 
         # Account Selection Section
         account_label = QLabel("Select Account:")
@@ -1743,6 +1749,15 @@ class MainWindow(QMainWindow):
                     self, "Info", "No messages found.")
             self.view_history_messages()
             self.load_users_with_search_history()
+
+    def back_to_history_list(self):
+        self.history_display_frame.setVisible(False)
+        self.history_main_frame.setVisible(True)
+        self.history_messages_display.clear()
+        self.history_status_label.setText(
+            f"Select a chat to view messages for {self.user_combo.currentText()}")
+        self.current_chat_id = None
+        self.current_chat_name = None
 
     def back_to_history_list(self):
         self.history_display_frame.setVisible(False)

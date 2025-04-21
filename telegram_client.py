@@ -27,8 +27,6 @@ class TelegramManager:
 
     def __init__(self, user_phone, api_id, api_hash, parent=None):
         """Initialize the Telegram client with a session name based on the user phone."""
-        # Use user_phone to create a unique session file for each account
-        # Clean the phone number to remove invalid characters for filenames
         session_name = user_phone.replace("+", "").replace(" ", "")
         session_path = os.path.join(SESSION_DIR, f"session_{session_name}")
         self.client = TelegramClient(session_path, api_id, api_hash)
@@ -116,9 +114,8 @@ class TelegramManager:
                     username = dialog.entity.username.lower() if dialog.entity.username else ""
                     search_term_lower = search_term.lower()
 
-                    # If search term starts with '@', search by username only
                     if search_term_lower.startswith('@'):
-                        search_term_clean = search_term_lower[1:]  # Remove '@'
+                        search_term_clean = search_term_lower[1:]
                         if search_term_clean and search_term_clean == username:
                             chats.append(
                                 (dialog.id, dialog.name, dialog.entity.username))
@@ -126,7 +123,6 @@ class TelegramManager:
                                 logger.debug(
                                     f"Found matching chat by username: {dialog.name} (ID: {dialog.id}, Username: {dialog.entity.username})")
                     else:
-                        # Match by ID or name
                         if search_term_lower == chat_id or search_term_lower in chat_name:
                             chats.append(
                                 (dialog.id, dialog.name, dialog.entity.username))

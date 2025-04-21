@@ -1,4 +1,6 @@
-# utils.py
+from telethon.tl.types import User, Chat, Channel
+
+
 def search_by_username(username, chats):
     """Search for a chat by username in the list of chats."""
     username = username.strip().lstrip('@').lower()
@@ -12,34 +14,52 @@ def search_by_username(username, chats):
 
 
 def get_sender_name(sender, me):
-    """Get a readable name for the message sender."""
+    """Extract the sender's name from the sender object."""
     if not sender:
         return "Unknown"
-    if sender.id == me.id:
-        return "me"
-    return sender.username or sender.first_name or "Unknown"
+    if isinstance(sender, User):
+        if sender.id == me.id:
+            return "You"
+        return sender.first_name or sender.username or "Unknown User"
+    elif isinstance(sender, (Chat, Channel)):
+        return sender.title or "Unknown Group"
+    return "Unknown"
 
 
 def get_message_content(message):
-    """Extract the content of a message as a string."""
+    """Extract the content of a message in a human-readable format."""
     if not message:
         return None
-    if message.text:
+
+    # Check for message attributes safely using hasattr
+    if hasattr(message, 'text') and message.text:
         return message.text
-    if message.photo:
+    if hasattr(message, 'photo') and message.photo:
         return "[Photo]"
-    if message.video:
+    if hasattr(message, 'video') and message.video:
         return "[Video]"
-    if message.document:
+    if hasattr(message, 'document') and message.document:
         return "[Document]"
-    if message.sticker:
+    if hasattr(message, 'sticker') and message.sticker:
         return "[Sticker]"
-    if message.audio:
+    if hasattr(message, 'audio') and message.audio:
         return "[Audio]"
-    if message.voice:
+    if hasattr(message, 'voice') and message.voice:
         return "[Voice]"
-    if message.location:
+    if hasattr(message, 'location') and message.location:
         return "[Location]"
-    if message.contact:
+    if hasattr(message, 'contact') and message.contact:
         return "[Contact]"
+    if hasattr(message, 'poll') and message.poll:
+        return "[Poll]"
+    if hasattr(message, 'dice') and message.dice:
+        return "[Dice]"
+    if hasattr(message, 'action') and message.action:
+        return f"[Action: {str(message.action)}]"
+    if hasattr(message, 'fwd_from') and message.fwd_from:
+        return "[Forwarded Message]"
+    if hasattr(message, 'via_bot') and message.via_bot:
+        return "[Bot Message]"
+
+    # Fallback for messages with no recognizable content
     return "[Unknown Content]"
