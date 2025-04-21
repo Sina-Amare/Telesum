@@ -255,6 +255,9 @@ class MainWindow(QMainWindow):
         self.current_chat_id = None
         self.current_chat_name = None
 
+# Updated apply_stylesheet to enhance QTextEdit and QPushButton styles
+# Updated apply_stylesheet to improve QFrame, QLabel, QLineEdit, QComboBox, and QPushButton styles
+
     def apply_stylesheet(self):
         if self.is_dark_mode:
             stylesheet = """
@@ -299,32 +302,34 @@ class MainWindow(QMainWindow):
             }
             QFrame {
                 background-color: #2A2A4A;
-                border: 1px solid #404040;
-                border-radius: 12px;
-                padding: 20px;
-                margin: 10px;
+                border: none;
+                border-radius: 15px;
+                padding: 25px;
+                margin: 15px;
+                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3);
             }
             QLabel {
                 color: #E0E0E0;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 13pt;
-                font-weight: 500;
-                padding: 8px;
-                min-width: 150px;
+                font-size: 14pt;
+                font-weight: 600;
+                padding: 10px;
+                min-width: 180px;
                 min-height: 40px;
                 text-align: left;
             }
             QLineEdit {
                 background-color: #3A3A5A;
                 color: #E0E0E0;
-                border: 1px solid #505050;
-                border-radius: 10px;
-                padding: 12px 18px;
+                border: 1px solid #606080;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
+                font-size: 13pt;
+                min-width: 450px;
+                min-height: 50px;
                 text-align: left;
+                box-shadow: inset 0px 2px 5px rgba(0, 0, 0, 0.2);
             }
             QLineEdit:focus {
                 border: 2px solid #9B59B6;
@@ -337,17 +342,18 @@ class MainWindow(QMainWindow):
             QComboBox {
                 background-color: #3A3A5A;
                 color: #E0E0E0;
-                border: 1px solid #505050;
-                border-radius: 10px;
-                padding: 12px 18px;
+                border: 1px solid #606080;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
+                font-size: 13pt;
+                min-width: 450px;
+                min-height: 50px;
+                box-shadow: inset 0px 2px 5px rgba(0, 0, 0, 0.2);
             }
             QComboBox:hover {
                 background-color: #40406A;
-                border: 1px solid #606080;
+                border: 1px solid #707090;
             }
             QComboBox::drop-down {
                 width: 30px;
@@ -358,7 +364,7 @@ class MainWindow(QMainWindow):
                 image: none;
                 width: 12px;
                 height: 12px;
-                margin-right: 10px;
+                margin-right: 15px;
                 border-left: 6px solid transparent;
                 border-right: 6px solid transparent;
                 border-top: 6px solid #E0E0E0;
@@ -395,12 +401,15 @@ class MainWindow(QMainWindow):
                 );
                 color: #FFFFFF;
                 border: none;
-                border-radius: 10px;
-                padding: 12px;
+                border-radius: 12px;
+                padding: 15px 25px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 12pt;
+                font-size: 13pt;
                 font-weight: 600;
                 transition: background-color 0.2s;
+                min-height: 50px;
+                min-width: 200px;
+                box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
             }
             QPushButton:hover {
                 background: qlineargradient(
@@ -410,6 +419,7 @@ class MainWindow(QMainWindow):
             }
             QPushButton:pressed {
                 background: #6A1B9A;
+                box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
             }
             QPushButton[delete="true"] {
                 background: qlineargradient(
@@ -424,12 +434,17 @@ class MainWindow(QMainWindow):
                 background: #B0291B;
             }
             QTextEdit {
-                background-color: #3A3A5A;
+                background-color: #2A2A4A;
                 color: #E0E0E0;
-                border: 1px solid #505050;
-                border-radius: 10px;
+                border: 1px solid #404040;
+                border-radius: 12px;
+                padding: 15px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
                 font-size: 14pt;
+                line-height: 1.5;
+            }
+            QTextEdit:focus {
+                border: 2px solid #9B59B6;
             }
             QListWidget {
                 background-color: #3A3A5A;
@@ -533,18 +548,19 @@ class MainWindow(QMainWindow):
             }
             QFrame {
                 background-color: #F5F5F5;
-                border: 1px solid #B0BEC5;
-                border-radius: 12px;
-                padding: 20px;
-                margin: 10px;
+                border: none;
+                border-radius: 15px;
+                padding: 25px;
+                margin: 15px;
+                box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
             }
             QLabel {
                 color: #212121;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 13pt;
-                font-weight: 500;
-                padding: 8px;
-                min-width: 150px;
+                font-size: 14pt;
+                font-weight: 600;
+                padding: 10px;
+                min-width: 180px;
                 min-height: 40px;
                 text-align: left;
             }
@@ -552,13 +568,14 @@ class MainWindow(QMainWindow):
                 background-color: #FFFFFF;
                 color: #212121;
                 border: 1px solid #B0BEC5;
-                border-radius: 10px;
-                padding: 12px 18px;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
+                font-size: 13pt;
+                min-width: 450px;
+                min-height: 50px;
                 text-align: left;
+                box-shadow: inset 0px 2px 5px rgba(0, 0, 0, 0.1);
             }
             QLineEdit:focus {
                 border: 2px solid #9B59B6;
@@ -572,12 +589,13 @@ class MainWindow(QMainWindow):
                 background-color: #FFFFFF;
                 color: #212121;
                 border: 1px solid #B0BEC5;
-                border-radius: 10px;
-                padding: 12px 18px;
+                border-radius: 12px;
+                padding: 12px 20px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
+                font-size: 13pt;
+                min-width: 450px;
+                min-height: 50px;
+                box-shadow: inset 0px 2px 5px rgba(0, 0, 0, 0.1);
             }
             QComboBox:hover {
                 background-color: #FAFAFA;
@@ -592,7 +610,7 @@ class MainWindow(QMainWindow):
                 image: none;
                 width: 12px;
                 height: 12px;
-                margin-right: 10px;
+                margin-right: 15px;
                 border-left: 6px solid transparent;
                 border-right: 6px solid transparent;
                 border-top: 6px solid #212121;
@@ -629,12 +647,15 @@ class MainWindow(QMainWindow):
                 );
                 color: #FFFFFF;
                 border: none;
-                border-radius: 10px;
-                padding: 12px;
+                border-radius: 12px;
+                padding: 15px 25px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-size: 12pt;
+                font-size: 13pt;
                 font-weight: 600;
                 transition: background-color 0.2s;
+                min-height: 50px;
+                min-width: 200px;
+                box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
             }
             QPushButton:hover {
                 background: qlineargradient(
@@ -644,6 +665,7 @@ class MainWindow(QMainWindow):
             }
             QPushButton:pressed {
                 background: #6A1B9A;
+                box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
             }
             QPushButton[delete="true"] {
                 background: qlineargradient(
@@ -658,12 +680,17 @@ class MainWindow(QMainWindow):
                 background: #B0291B;
             }
             QTextEdit {
-                background-color: #FFFFFF;
+                background-color: #F5F5F5;
                 color: #212121;
                 border: 1px solid #B0BEC5;
-                border-radius: 10px;
+                border-radius: 12px;
+                padding: 15px;
                 font-family: 'Segoe UI', 'Arial', sans-serif;
                 font-size: 14pt;
+                line-height: 1.5;
+            }
+            QTextEdit:focus {
+                border: 2px solid #9B59B6;
             }
             QListWidget {
                 background-color: #FFFFFF;
@@ -737,11 +764,23 @@ class MainWindow(QMainWindow):
             "🌙 Dark Mode" if not self.is_dark_mode else "☀️ Light Mode")
 
     # Updated setup_login_tab method to improve layout and styling
+# Updated setup_login_tab to improve layout, spacing, and add a title
 
     def setup_login_tab(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(50, 50, 50, 50)
-        layout.setSpacing(50)
+        layout.setContentsMargins(60, 60, 60, 60)
+        layout.setSpacing(60)
+
+        # Title Label
+        title_label = QLabel("Login to Telegram")
+        title_label.setStyleSheet("""
+            font-size: 24pt;
+            font-weight: 700;
+            color: #FFFFFF;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            padding: 10px;
+        """)
+        layout.addWidget(title_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Theme Toggle Button
         self.theme_toggle_button = QPushButton("🌙 Dark Mode")
@@ -752,9 +791,9 @@ class MainWindow(QMainWindow):
 
         # Account Selection Section
         account_frame = QFrame()
-        account_frame.setMinimumHeight(100)
+        account_frame.setMinimumHeight(120)
         account_layout = QHBoxLayout()
-        account_layout.setSpacing(30)
+        account_layout.setSpacing(40)
         account_label = QLabel("Select Account:")
         account_label.setMinimumWidth(200)
         account_label.setMinimumHeight(50)
@@ -762,7 +801,7 @@ class MainWindow(QMainWindow):
         self.account_combo.addItem("New Account")
         self.account_combo.currentIndexChanged.connect(
             self.on_account_selected)
-        self.account_combo.setMinimumWidth(400)
+        self.account_combo.setMinimumWidth(450)
         self.account_combo.setMinimumHeight(50)
         account_layout.addWidget(account_label)
         account_layout.addWidget(self.account_combo)
@@ -771,15 +810,15 @@ class MainWindow(QMainWindow):
 
         # Phone Number Section
         phone_frame = QFrame()
-        phone_frame.setMinimumHeight(100)
+        phone_frame.setMinimumHeight(120)
         phone_layout = QHBoxLayout()
-        phone_layout.setSpacing(30)
+        phone_layout.setSpacing(40)
         phone_label = QLabel("Phone Number:")
         phone_label.setMinimumWidth(200)
         phone_label.setMinimumHeight(50)
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("e.g., +989123456789")
-        self.phone_input.setMinimumWidth(400)
+        self.phone_input.setMinimumWidth(450)
         self.phone_input.setMinimumHeight(50)
         phone_layout.addWidget(phone_label)
         phone_layout.addWidget(self.phone_input)
@@ -788,16 +827,16 @@ class MainWindow(QMainWindow):
 
         # API Credentials Section
         api_frame = QFrame()
-        api_frame.setMinimumHeight(150)
+        api_frame.setMinimumHeight(180)
         api_layout = QGridLayout()
-        api_layout.setSpacing(30)
+        api_layout.setSpacing(40)
 
         api_id_label = QLabel("API ID:")
         api_id_label.setMinimumWidth(200)
         api_id_label.setMinimumHeight(50)
         self.api_id_input = QLineEdit()
         self.api_id_input.setPlaceholderText("Enter your Telegram API ID")
-        self.api_id_input.setMinimumWidth(400)
+        self.api_id_input.setMinimumWidth(450)
         self.api_id_input.setMinimumHeight(50)
 
         api_hash_label = QLabel("API Hash:")
@@ -805,7 +844,7 @@ class MainWindow(QMainWindow):
         api_hash_label.setMinimumHeight(50)
         self.api_hash_input = QLineEdit()
         self.api_hash_input.setPlaceholderText("Enter your Telegram API Hash")
-        self.api_hash_input.setMinimumWidth(400)
+        self.api_hash_input.setMinimumWidth(450)
         self.api_hash_input.setMinimumHeight(50)
 
         api_layout.addWidget(api_id_label, 0, 0)
@@ -817,9 +856,9 @@ class MainWindow(QMainWindow):
 
         # Timezone Section
         tz_frame = QFrame()
-        tz_frame.setMinimumHeight(100)
+        tz_frame.setMinimumHeight(120)
         tz_layout = QHBoxLayout()
-        tz_layout.setSpacing(30)
+        tz_layout.setSpacing(40)
         tz_label = QLabel("Timezone:")
         tz_label.setMinimumWidth(200)
         tz_label.setMinimumHeight(50)
@@ -830,7 +869,7 @@ class MainWindow(QMainWindow):
             "United Kingdom (UTC+0:00)",
             "Other (UTC)"
         ])
-        self.tz_combo.setMinimumWidth(400)
+        self.tz_combo.setMinimumWidth(450)
         self.tz_combo.setMinimumHeight(50)
         tz_layout.addWidget(tz_label)
         tz_layout.addWidget(self.tz_combo)
@@ -841,7 +880,7 @@ class MainWindow(QMainWindow):
         self.connect_button = QPushButton("🔒 Connect to Telegram")
         self.connect_button.clicked.connect(self.connect_telegram)
         self.connect_button.setMinimumHeight(60)
-        self.connect_button.setMinimumWidth(300)
+        self.connect_button.setMinimumWidth(350)
         layout.addWidget(self.connect_button,
                          alignment=Qt.AlignmentFlag.AlignCenter)
 
@@ -849,7 +888,7 @@ class MainWindow(QMainWindow):
         self.login_status = QLabel(
             "Enter your phone number, API credentials, and timezone to connect.")
         self.login_status.setStyleSheet(
-            "font-size: 12pt; color: #B0BEC5; font-family: 'Segoe UI', 'Arial', sans-serif;")
+            "font-size: 13pt; color: #B0BEC5; font-family: 'Segoe UI', 'Arial', sans-serif;")
         layout.addWidget(self.login_status,
                          alignment=Qt.AlignmentFlag.AlignCenter)
 
@@ -869,10 +908,16 @@ class MainWindow(QMainWindow):
 
         self.chats_tab.setLayout(layout)
 
+# Updated setup_messages_tab to support a clean message display view
+
     def setup_messages_tab(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(30)
+        self.messages_layout = QVBoxLayout()
+        self.messages_layout.setContentsMargins(40, 40, 40, 40)
+        self.messages_layout.setSpacing(30)
+
+        # Main Menu Frame (Initial View)
+        self.messages_main_frame = QFrame()
+        main_frame_layout = QVBoxLayout()
 
         # Chat Selection Section
         chats_frame = QFrame()
@@ -885,7 +930,7 @@ class MainWindow(QMainWindow):
         chats_layout.addWidget(chats_label)
         chats_layout.addWidget(self.messages_chat_combo)
         chats_frame.setLayout(chats_layout)
-        layout.addWidget(chats_frame)
+        main_frame_layout.addWidget(chats_frame)
 
         # Buttons Section
         button_layout = QHBoxLayout()
@@ -900,30 +945,54 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(
             self.cancel_button, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        self.copy_summary_button = QPushButton("📋 Copy Summary")
-        self.copy_summary_button.clicked.connect(self.copy_summary)
-        self.copy_summary_button.setVisible(False)
-        button_layout.addWidget(self.copy_summary_button)
-
-        layout.addLayout(button_layout)
-
-        self.messages_display = QTextEdit()
-        self.messages_display.setReadOnly(True)
-        self.messages_display.setFont(QFont("Segoe UI", 14))
-        layout.addWidget(self.messages_display)
+        main_frame_layout.addLayout(button_layout)
 
         self.messages_progress = QProgressBar()
         self.messages_progress.setVisible(False)
         self.messages_progress.setRange(0, 100)
         self.messages_progress.setValue(0)
-        layout.addWidget(self.messages_progress)
+        main_frame_layout.addWidget(self.messages_progress)
 
         self.messages_status_label = QLabel("Ready to fetch messages.")
         self.messages_status_label.setStyleSheet(
             "font-size: 11pt; color: #B0BEC5; font-family: 'Segoe UI';")
-        layout.addWidget(self.messages_status_label)
+        main_frame_layout.addWidget(self.messages_status_label)
 
-        self.messages_tab.setLayout(layout)
+        main_frame_layout.addStretch()
+        self.messages_main_frame.setLayout(main_frame_layout)
+        self.messages_layout.addWidget(self.messages_main_frame)
+
+        # Messages Display Frame (Shown after fetching)
+        self.messages_display_frame = QFrame()
+        self.messages_display_frame.setVisible(False)
+        display_layout = QVBoxLayout()
+        display_layout.setContentsMargins(0, 0, 0, 0)
+        display_layout.setSpacing(20)
+
+        self.messages_display = QTextEdit()
+        self.messages_display.setReadOnly(True)
+        self.messages_display.setFont(QFont("Segoe UI", 14))
+        display_layout.addWidget(self.messages_display)
+
+        # Toolbar for actions
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setSpacing(15)
+
+        self.copy_summary_button = QPushButton("📋 Copy Summary")
+        self.copy_summary_button.clicked.connect(self.copy_summary)
+        self.copy_summary_button.setVisible(False)
+        toolbar_layout.addWidget(self.copy_summary_button)
+
+        back_button = QPushButton("⬅️ Back to Menu")
+        back_button.clicked.connect(self.back_to_messages_menu)
+        toolbar_layout.addStretch()
+        toolbar_layout.addWidget(back_button)
+
+        display_layout.addLayout(toolbar_layout)
+        self.messages_display_frame.setLayout(display_layout)
+        self.messages_layout.addWidget(self.messages_display_frame)
+
+        self.messages_tab.setLayout(self.messages_layout)
 
     def setup_search_tab(self):
         layout = QVBoxLayout()
@@ -978,12 +1047,16 @@ class MainWindow(QMainWindow):
 
         self.search_tab.setLayout(layout)
 
-    # Updated setup_search_history_tab to increase history_messages_display size
+    # Updated setup_search_history_tab to support a clean message display view
 
     def setup_search_history_tab(self):
         self.history_layout = QVBoxLayout()
         self.history_layout.setContentsMargins(40, 40, 40, 40)
         self.history_layout.setSpacing(30)
+
+        # Main Menu Frame (Initial View)
+        self.history_main_frame = QFrame()
+        main_frame_layout = QVBoxLayout()
 
         # User Selection Section
         user_frame = QFrame()
@@ -999,57 +1072,66 @@ class MainWindow(QMainWindow):
         user_layout.addWidget(user_label)
         user_layout.addWidget(self.user_combo)
         user_frame.setLayout(user_layout)
-        self.history_layout.addWidget(user_frame)
+        main_frame_layout.addWidget(user_frame)
 
         self.history_list = QListWidget()
-        self.history_layout.addWidget(self.history_list)
+        main_frame_layout.addWidget(self.history_list)
 
         button_layout = QHBoxLayout()
         view_button = QPushButton("📜 View Messages")
         view_button.clicked.connect(self.view_history_messages)
         button_layout.addWidget(view_button)
-        self.history_layout.addLayout(button_layout)
-
-        self.messages_frame = QFrame()
-        self.messages_frame.setVisible(False)
-        messages_layout = QVBoxLayout()
-
-        self.history_messages_display = QTextEdit()
-        self.history_messages_display.setReadOnly(True)
-        self.history_messages_display.setFont(QFont("Segoe UI", 14))
-        self.history_messages_display.setMinimumHeight(400)  # Increased size
-        self.history_messages_display.setMinimumWidth(600)
-        messages_layout.addWidget(self.history_messages_display)
-
-        manage_buttons_layout = QHBoxLayout()
-        delete_recent_button = QPushButton("🗑️ Delete Recent Messages")
-        delete_recent_button.clicked.connect(self.delete_recent_messages)
-        delete_recent_button.setProperty("delete", True)
-        manage_buttons_layout.addWidget(delete_recent_button)
-
-        delete_date_button = QPushButton("🗓️ Delete Messages from Date")
-        delete_date_button.clicked.connect(self.delete_messages_from_date)
-        delete_date_button.setProperty("delete", True)
-        manage_buttons_layout.addWidget(delete_date_button)
-
-        delete_all_button = QPushButton("🗑️ Delete All Messages")
-        delete_all_button.clicked.connect(self.delete_all_messages)
-        delete_all_button.setProperty("delete", True)
-        manage_buttons_layout.addWidget(delete_all_button)
-
-        back_button = QPushButton("⬅️ Back to List")
-        back_button.clicked.connect(self.back_to_history_list)
-        manage_buttons_layout.addWidget(back_button)
-
-        messages_layout.addLayout(manage_buttons_layout)
-        self.messages_frame.setLayout(messages_layout)
-        self.history_layout.addWidget(self.messages_frame)
+        main_frame_layout.addLayout(button_layout)
 
         self.history_status_label = QLabel(
             "Select a user to view their search history.")
         self.history_status_label.setStyleSheet(
             "font-size: 11pt; color: #B0BEC5; font-family: 'Segoe UI';")
-        self.history_layout.addWidget(self.history_status_label)
+        main_frame_layout.addWidget(self.history_status_label)
+
+        main_frame_layout.addStretch()
+        self.history_main_frame.setLayout(main_frame_layout)
+        self.history_layout.addWidget(self.history_main_frame)
+
+        # Messages Display Frame (Shown after viewing messages)
+        self.history_display_frame = QFrame()
+        self.history_display_frame.setVisible(False)
+        display_layout = QVBoxLayout()
+        display_layout.setContentsMargins(0, 0, 0, 0)
+        display_layout.setSpacing(20)
+
+        self.history_messages_display = QTextEdit()
+        self.history_messages_display.setReadOnly(True)
+        self.history_messages_display.setFont(QFont("Segoe UI", 14))
+        display_layout.addWidget(self.history_messages_display)
+
+        # Toolbar for actions
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setSpacing(15)
+
+        delete_recent_button = QPushButton("🗑️ Delete Recent Messages")
+        delete_recent_button.clicked.connect(self.delete_recent_messages)
+        delete_recent_button.setProperty("delete", True)
+        toolbar_layout.addWidget(delete_recent_button)
+
+        delete_date_button = QPushButton("🗓️ Delete Messages from Date")
+        delete_date_button.clicked.connect(self.delete_messages_from_date)
+        delete_date_button.setProperty("delete", True)
+        toolbar_layout.addWidget(delete_date_button)
+
+        delete_all_button = QPushButton("🗑️ Delete All Messages")
+        delete_all_button.clicked.connect(self.delete_all_messages)
+        delete_all_button.setProperty("delete", True)
+        toolbar_layout.addWidget(delete_all_button)
+
+        back_button = QPushButton("⬅️ Back to Menu")
+        back_button.clicked.connect(self.back_to_history_list)
+        toolbar_layout.addStretch()
+        toolbar_layout.addWidget(back_button)
+
+        display_layout.addLayout(toolbar_layout)
+        self.history_display_frame.setLayout(display_layout)
+        self.history_layout.addWidget(self.history_display_frame)
 
         self.search_history_tab.setLayout(self.history_layout)
 
@@ -1416,6 +1498,7 @@ class MainWindow(QMainWindow):
             logger.error(f"Error in fetch_coro: {e}")
             raise
 
+# Updated fetch_chat_messages to switch to display view
     def fetch_chat_messages(self):
         if self.is_fetching:
             QMessageBox.warning(self, "Operation in Progress",
@@ -1445,7 +1528,6 @@ class MainWindow(QMainWindow):
             self.messages_progress.setVisible(True)
             self.messages_progress.setValue(0)
             self.cancel_button.setVisible(True)
-            self.copy_summary_button.setVisible(False)
             self.messages_display.clear()
             self.messages_status_label.setText("Fetching messages...")
 
@@ -1457,6 +1539,10 @@ class MainWindow(QMainWindow):
             elif filter_type == "specific_date":
                 logger.info(
                     f"Fetching messages in {chat_name} on {filter_value}...")
+
+            # Switch to display view
+            self.messages_main_frame.setVisible(False)
+            self.messages_display_frame.setVisible(True)
 
             self.fetch_task = asyncio.ensure_future(self.fetch_coro(
                 chat_id, chat_name, filter_type, filter_value))
@@ -1481,6 +1567,8 @@ class MainWindow(QMainWindow):
             clipboard.setText(summary_text)
             QMessageBox.information(
                 self, "Success", "Summary copied to clipboard!")
+
+    # Updated display_messages_in_tab to handle the new display view
 
     def display_messages_in_tab(self, task):
         self.is_fetching = False
@@ -1507,6 +1595,15 @@ class MainWindow(QMainWindow):
             logger.error(f"Error displaying messages in tab: {e}")
             QMessageBox.critical(
                 self, "Error", f"Error fetching messages: {e}")
+
+    # New method to return to the messages tab main menu
+
+    def back_to_messages_menu(self):
+        self.messages_display_frame.setVisible(False)
+        self.messages_main_frame.setVisible(True)
+        self.messages_display.clear()
+        self.messages_status_label.setText("Ready to fetch messages.")
+        self.copy_summary_button.setVisible(False)
 
     def search_chat(self):
         search_term = self.search_input.text().strip()
@@ -1591,6 +1688,7 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentWidget(self.messages_tab)
         self.fetch_chat_messages()
 
+    # Updated view_history_messages to switch to display view
     def view_history_messages(self):
         selected_item = self.history_list.currentItem()
         if not selected_item or "No chats" in selected_item.text():
@@ -1621,8 +1719,9 @@ class MainWindow(QMainWindow):
             self.history_messages_display.setText("No messages found.")
             self.history_status_label.setText("No messages found.")
 
-        self.history_list.setVisible(False)
-        self.messages_frame.setVisible(True)
+        # Switch to display view
+        self.history_main_frame.setVisible(False)
+        self.history_display_frame.setVisible(True)
 
     def delete_recent_messages(self):
         if not self.current_chat_id:
@@ -1708,9 +1807,11 @@ class MainWindow(QMainWindow):
             self.view_history_messages()
             self.load_users_with_search_history()
 
+# Updated back_to_history_list to return to the main menu
     def back_to_history_list(self):
-        self.messages_frame.setVisible(False)
-        self.history_list.setVisible(True)
+        self.history_display_frame.setVisible(False)
+        self.history_main_frame.setVisible(True)
+        self.history_messages_display.clear()
         self.history_status_label.setText(
             "Select a user to view their search history.")
         self.load_user_search_history()
