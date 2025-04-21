@@ -248,20 +248,19 @@ def load_chats(user_phone):
 
 
 def save_search_history(username, user_phone):
-    """Temporarily disabled to avoid adding new entries to search history."""
-    # session = Session()
-    # try:
-    #     timestamp = datetime.now(pytz.UTC)
-    #     session.add(SearchHistory(username=username,
-    #                 timestamp=timestamp, user_phone=user_phone))
-    #     session.commit()
-    #     logger.info(f"Saved search history for username: {username}")
-    # except Exception as e:
-    #     session.rollback()
-    #     logger.error(f"Error saving search history: {e}")
-    # finally:
-    #     session.close()
-    pass
+    """Save a search history entry for a specific user."""
+    session = Session()
+    try:
+        timestamp = datetime.now(pytz.UTC)
+        session.add(SearchHistory(username=username,
+                    timestamp=timestamp, user_phone=user_phone))
+        session.commit()
+        logger.info(f"Saved search history for username: {username}")
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error saving search history: {e}")
+    finally:
+        session.close()
 
 
 def load_search_history(user_phone):
@@ -468,14 +467,17 @@ def load_messages(chat_id, filter_type, filter_value, user_phone, user_timezone=
         session.close()
 
 
-def delete_messages(chat_id, user_phone, num_messages=None, specific_date=None, user_timezone=None):
+def delete_messages(chat_id, user_phone, num_messages=None, specific_date=None, user_timezone=None, delete_all=False):
     """Delete messages for a specific chat and user from the database, respecting user timezone."""
     session = Session()
     try:
         query = session.query(Message).filter_by(
             chat_id=chat_id, user_phone=user_phone)
 
-        if num_messages is not None:
+        if delete_all:
+            # Delete all messages for the chat and user
+            deleted_count = query.delete(synchronize_session=False)
+        elif num_messages is not None:
             subquery = (
                 select(Message.id)
                 .where(Message.chat_id == chat_id, Message.user_phone == user_phone)
@@ -483,6 +485,7 @@ def delete_messages(chat_id, user_phone, num_messages=None, specific_date=None, 
                 .limit(num_messages)
             )
             query = query.filter(Message.id.in_(subquery))
+            deleted_count = query.delete(synchronize_session=False)
         elif specific_date is not None:
             specific_date = datetime.strptime(specific_date, "%d %B %Y")
             if user_timezone:
@@ -496,8 +499,10 @@ def delete_messages(chat_id, user_phone, num_messages=None, specific_date=None, 
                     hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.UTC)
                 max_date = min_date + timedelta(days=1) - timedelta(seconds=1)
             query = query.filter(Message.timestamp.between(min_date, max_date))
+            deleted_count = query.delete(synchronize_session=False)
+        else:
+            deleted_count = 0
 
-        deleted_count = query.delete(synchronize_session=False)
         session.commit()
         logger.info(f"Deleted {deleted_count} messages for chat ID {chat_id}")
         return deleted_count

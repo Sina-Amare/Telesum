@@ -93,9 +93,39 @@ def setup_logging(text_edit):
     logger.addHandler(queue_handler)
     logger.addHandler(stream_handler)
 
+
+# Dialog for Fetching Messages with Progress Bar and Cancel Button
+class FetchingProgressDialog(QDialog):
+    def __init__(self, chat_name, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Fetching Messages for {chat_name}")
+        self.setMinimumSize(400, 200)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
+
+        self.status_label = QLabel("Fetching messages...")
+        self.status_label.setStyleSheet(
+            "font-size: 11pt; color: #B0BEC5; font-family: 'Segoe UI';")
+        layout.addWidget(self.status_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        layout.addWidget(self.progress_bar)
+
+        self.cancel_button = QPushButton("❌ Cancel Fetching")
+        self.cancel_button.setProperty("delete", True)
+        layout.addWidget(self.cancel_button,
+                         alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.setLayout(layout)
+
+
 # Updated FetchMessagesDialog init_ui to increase output box size
-
-
 class FetchMessagesDialog(QDialog):
     def __init__(self, telegram, chat_id, chat_name, user_timezone, user_phone, parent=None):
         super().__init__(parent)
@@ -255,6 +285,7 @@ class MainWindow(QMainWindow):
         self.fetch_task = None
         self.current_chat_id = None
         self.current_chat_name = None
+        self.progress_dialog = None
 
     def apply_stylesheet(self):
         if self.is_dark_mode:
@@ -416,7 +447,7 @@ class MainWindow(QMainWindow):
             QPushButton[delete="true"] {
                 background: qlineargradient(
                     x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #E NantucketC3C, stop:1 #C0392B
+                    stop:0 #E74C3C, stop:1 #C0392B
                 );
             }
             QPushButton[delete="true"]:hover {
@@ -741,7 +772,11 @@ class MainWindow(QMainWindow):
             }
             """
         self.setStyleSheet(stylesheet)
-        FetchMessagesDialog.setStyleSheet(self, stylesheet)
+        # Apply stylesheet to FetchMessagesDialog instances when created
+        if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
+            self.fetch_dialog.setStyleSheet(stylesheet)
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.setStyleSheet(stylesheet)
 
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
@@ -1185,30 +1220,6 @@ class MainWindow(QMainWindow):
         self.logs_text.verticalScrollBar().setValue(
             self.logs_text.verticalScrollBar().maximum())
 
-    def update_search_history(self):
-        self.history_list.clear()
-        chats = load_chats(self.user_phone)
-        if not chats:
-            self.history_list.addItem("No chats found.")
-            return
-
-        found = False
-        for chat_id, chat_name, username in chats:
-            messages, _, _ = load_messages(
-                chat_id, "recent_messages", 1, self.user_phone)
-            if messages:
-                found = True
-                display_text = f"{chat_name} (ID: {chat_id})"
-                if username:
-                    display_text += f" (@{username})"
-                self.history_list.addItem(display_text)
-                logger.info(f"Added {chat_name} to Search History list")
-
-        if not found:
-            self.history_list.addItem("No chats with saved messages found.")
-            self.history_status_label.setText(
-                "No chats with saved messages found.")
-
     def connect_telegram(self):
         self.user_phone = self.phone_input.text().strip()
         if not (self.user_phone.startswith("+") and self.user_phone[1:].isdigit()):
@@ -1396,8 +1407,9 @@ class MainWindow(QMainWindow):
 
     async def update_progress(self, progress):
         def set_progress():
-            self.messages_progress.setValue(int(progress))
-            QApplication.processEvents()
+            if self.progress_dialog:
+                self.progress_dialog.progress_bar.setValue(int(progress))
+                QApplication.processEvents()
         await asyncio.get_event_loop().run_in_executor(None, set_progress)
 
     async def fetch_coro(self, chat_id, chat_name, filter_type, filter_value):
@@ -1417,8 +1429,9 @@ class MainWindow(QMainWindow):
                 return "No messages found."
 
             await self.update_progress(90)
-            self.messages_status_label.setText(
-                "Messages fetched, analyzing with AI...")
+            if self.progress_dialog:
+                self.progress_dialog.status_label.setText(
+                    "Messages fetched, analyzing with AI...")
 
             result = ""
             if messages:
@@ -1466,14 +1479,17 @@ class MainWindow(QMainWindow):
         save_search_history(search_term, self.user_phone)
         self.load_users_with_search_history()
 
-        fetch_dialog = FetchMessagesDialog(
+        self.fetch_dialog = FetchMessagesDialog(
             self.telegram, chat_id, chat_name, self.user_timezone, self.user_phone, self)
-        if fetch_dialog.exec():
-            filter_type, filter_value = fetch_dialog.result
+        self.fetch_dialog.setStyleSheet(self.styleSheet())
+        if self.fetch_dialog.exec():
+            filter_type, filter_value = self.fetch_dialog.result
             self.is_fetching = True
-            self.messages_progress.setVisible(True)
-            self.messages_progress.setValue(0)
-            self.cancel_button.setVisible(True)
+            self.progress_dialog = FetchingProgressDialog(chat_name, self)
+            self.progress_dialog.setStyleSheet(self.styleSheet())
+            self.progress_dialog.cancel_button.clicked.connect(
+                self.cancel_fetching)
+            self.progress_dialog.show()
             self.messages_display.clear()
             self.messages_status_label.setText("Fetching messages...")
 
@@ -1498,9 +1514,10 @@ class MainWindow(QMainWindow):
         if self.is_fetching and self.fetch_task:
             self.fetch_task.cancel()
             self.is_fetching = False
-            self.cancel_button.setVisible(False)
+            if self.progress_dialog:
+                self.progress_dialog.close()
+                self.progress_dialog = None
             self.copy_summary_button.setVisible(False)
-            self.messages_progress.setVisible(False)
             self.messages_display.setText("Fetching cancelled by user.")
             self.messages_status_label.setText("Fetching cancelled.")
 
@@ -1516,8 +1533,9 @@ class MainWindow(QMainWindow):
 
     def display_messages_in_tab(self, task):
         self.is_fetching = False
-        self.cancel_button.setVisible(False)
-        self.messages_progress.setVisible(False)
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
         try:
             result = task.result()
             if result:
@@ -1534,7 +1552,7 @@ class MainWindow(QMainWindow):
                 self.messages_status_label.setText("No messages found.")
                 self.copy_summary_button.setVisible(False)
         except Exception as e:
-            self.messages_status_label.setText("s fetching messages.")
+            self.messages_status_label.setText("Error fetching messages.")
             self.copy_summary_button.setVisible(False)
             logger.error(f"Error displaying messages in tab: {e}")
             QMessageBox.critical(
@@ -1637,6 +1655,12 @@ class MainWindow(QMainWindow):
                                 "Please select a chat with saved messages.")
             return
 
+        selected_user = self.user_combo.currentText()
+        if selected_user == "Select a user...":
+            QMessageBox.warning(self, "Selection Error",
+                                "Please select a user first.")
+            return
+
         item_text = selected_item.text()
         parts = item_text.split("(ID: ")
         chat_name = parts[0].strip()
@@ -1647,7 +1671,7 @@ class MainWindow(QMainWindow):
         self.current_chat_name = chat_name
 
         messages, _, _ = load_messages(
-            chat_id, "recent_messages", 100, self.user_phone, self.user_timezone)
+            chat_id, "recent_messages", 100, selected_user, self.user_timezone)
         if messages:
             result = ""
             for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
@@ -1660,13 +1684,19 @@ class MainWindow(QMainWindow):
             self.history_messages_display.setText("No messages found.")
             self.history_status_label.setText("No messages found.")
 
-        # Switch to display view
+            # Switch to display view
         self.history_main_frame.setVisible(False)
         self.history_display_frame.setVisible(True)
 
     def delete_recent_messages(self):
         if not self.current_chat_id:
             QMessageBox.warning(self, "Selection Error", "No chat selected.")
+            return
+
+        selected_user = self.user_combo.currentText()
+        if selected_user == "Select a user...":
+            QMessageBox.warning(self, "Selection Error",
+                                "Please select a user first.")
             return
 
         count, ok = QInputDialog.getInt(
@@ -1678,7 +1708,7 @@ class MainWindow(QMainWindow):
             self, "Confirm Deletion", f"Are you sure you want to delete the last {count} messages for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
-                self.current_chat_id, self.user_phone, num_messages=count)
+                self.current_chat_id, selected_user, num_messages=count)
             if deleted_count > 0:
                 logger.info(
                     f"Deleted {deleted_count} recent messages for {self.current_chat_name}")
@@ -1697,6 +1727,12 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Selection Error", "No chat selected.")
             return
 
+        selected_user = self.user_combo.currentText()
+        if selected_user == "Select a user...":
+            QMessageBox.warning(self, "Selection Error",
+                                "Please select a user first.")
+            return
+
         date, ok = QInputDialog.getText(
             self, "Delete Messages from Date", "Enter date to delete messages from (e.g., 10 March 2025):")
         if not ok:
@@ -1713,7 +1749,7 @@ class MainWindow(QMainWindow):
             self, "Confirm Deletion", f"Are you sure you want to delete messages from {date} for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
-                self.current_chat_id, self.user_phone, specific_date=date, user_timezone=self.user_timezone)
+                self.current_chat_id, selected_user, specific_date=date, user_timezone=self.user_timezone)
             if deleted_count > 0:
                 logger.info(
                     f"Deleted {deleted_count} messages from {date} for {self.current_chat_name}")
@@ -1732,11 +1768,17 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Selection Error", "No chat selected.")
             return
 
+        selected_user = self.user_combo.currentText()
+        if selected_user == "Select a user...":
+            QMessageBox.warning(self, "Selection Error",
+                                "Please select a user first.")
+            return
+
         reply = QMessageBox.question(
             self, "Confirm Deletion", f"Are you sure you want to delete all messages for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
-                self.current_chat_id, self.user_phone, delete_all=True)
+                self.current_chat_id, selected_user, delete_all=True)
             if deleted_count > 0:
                 logger.info(
                     f"Deleted all {deleted_count} messages for {self.current_chat_name}")
@@ -1749,15 +1791,6 @@ class MainWindow(QMainWindow):
                     self, "Info", "No messages found.")
             self.view_history_messages()
             self.load_users_with_search_history()
-
-    def back_to_history_list(self):
-        self.history_display_frame.setVisible(False)
-        self.history_main_frame.setVisible(True)
-        self.history_messages_display.clear()
-        self.history_status_label.setText(
-            f"Select a chat to view messages for {self.user_combo.currentText()}")
-        self.current_chat_id = None
-        self.current_chat_name = None
 
     def back_to_history_list(self):
         self.history_display_frame.setVisible(False)
