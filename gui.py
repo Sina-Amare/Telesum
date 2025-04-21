@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QLineEdit, QComboBox, QTextEdit, QListWidget, QInputDialog,
                              QMessageBox, QLabel, QProgressBar, QFrame, QGridLayout, QDialog, QTableWidget,
-                             QTableWidgetItem)
+                             QTableWidgetItem, QStyle, QStyleFactory)
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 import asyncio
 import sys
 import qasync
@@ -94,6 +94,7 @@ def setup_logging(text_edit):
     logger.addHandler(stream_handler)
 
 
+# Updated FetchMessagesDialog init_ui to increase output box size
 class FetchMessagesDialog(QDialog):
     def __init__(self, telegram, chat_id, chat_name, user_timezone, user_phone, parent=None):
         super().__init__(parent)
@@ -104,137 +105,45 @@ class FetchMessagesDialog(QDialog):
         self.user_phone = user_phone
         self.result = None
         self.setWindowTitle(f"Fetch Messages for {chat_name}")
-        self.setMinimumSize(500, 250)
-        self.setStyleSheet("background-color: #212121; color: #ECEFF1;")
+        self.setMinimumSize(600, 400)  # Increased dialog size
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(30)
 
         filter_frame = QFrame()
-        filter_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        filter_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
+        filter_frame.setMinimumHeight(150)
         filter_layout = QGridLayout()
-        filter_layout.setSpacing(15)
+        filter_layout.setSpacing(20)
 
         filter_label = QLabel("Message Filter:")
-        filter_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
+        filter_label.setMinimumWidth(200)
+        filter_label.setMinimumHeight(50)
         self.filter_combo = QComboBox()
         self.filter_combo.addItems([
             "Recent messages (e.g., last 10 messages)",
             "Messages from recent days (e.g., last 7 days)",
             "Messages from a specific date (e.g., 10 March 2025)"
         ])
-        self.filter_combo.setMinimumWidth(300)
-        self.filter_combo.setMinimumHeight(40)
-        self.filter_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 300px;
-                min-height: 40px;
-            }
-            QComboBox:hover {
-                background-color: #383838;
-                border: 1px solid #666666;
-            }
-            QComboBox::drop-down {
-                width: 24px;
-                border: none;
-                background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                width: 12px;
-                height: 12px;
-                margin-right: 8px;
-                border-left: 6px solid transparent;
-                border-right: 6px solid transparent;
-                border-top: 6px solid #E0E0E0;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                selection-background-color: #1E88E5;
-                selection-color: #FFFFFF;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 4px;
-            }
-        """)
+        self.filter_combo.currentIndexChanged.connect(
+            self.update_placeholder_text)
+        self.filter_combo.setMinimumWidth(400)
+        self.filter_combo.setMinimumHeight(50)
 
         self.value_input = QLineEdit()
-        self.value_input.setPlaceholderText("e.g., 10, 7, 10 March 2025")
-        self.value_input.setMinimumWidth(200)
-        self.value_input.setMinimumHeight(40)
-        self.value_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 200px;
-                min-height: 40px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #1E88E5;
-                background-color: #383838;
-            }
-        """)
+        self.value_input.setMinimumWidth(400)
+        self.value_input.setMinimumHeight(50)
+        self.update_placeholder_text()
 
         self.fetch_button = QPushButton("📥 Fetch Messages")
         self.fetch_button.clicked.connect(self.fetch_messages)
-        self.fetch_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
+        self.fetch_button.setMinimumHeight(50)
 
         cancel_button = QPushButton("❌ Cancel")
         cancel_button.clicked.connect(self.reject)
-        cancel_button.setStyleSheet("""
-            QPushButton {
-                background-color: #EF5350;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #F44336;
-            }
-            QPushButton:pressed {
-                background-color: #D32F2F;
-            }
-        """)
+        cancel_button.setMinimumHeight(50)
 
         filter_layout.addWidget(filter_label, 0, 0)
         filter_layout.addWidget(self.filter_combo, 0, 1)
@@ -249,6 +158,16 @@ class FetchMessagesDialog(QDialog):
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
+
+    def update_placeholder_text(self):
+        filter_index = self.filter_combo.currentIndex()
+        if filter_index == 0:
+            self.value_input.setPlaceholderText(
+                "e.g., 10 for last 10 messages")
+        elif filter_index == 1:
+            self.value_input.setPlaceholderText("e.g., 7 for last 7 days")
+        else:
+            self.value_input.setPlaceholderText("e.g., 10 March 2025")
 
     def fetch_messages(self):
         filter_index = self.filter_combo.currentIndex()
@@ -288,51 +207,13 @@ class MainWindow(QMainWindow):
         self.loop = loop
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.setWindowTitle("TeleSam - Telegram Chat Manager")
-        self.setMinimumSize(900, 600)
-        self.setStyleSheet(
-            "background-color: #212121; color: #ECEFF1; font-family: 'Segoe UI';")
-        # Set default font for the entire application
-        app_font = QFont("Segoe UI", 12)
-        QApplication.setFont(app_font)
-        self.telegram = None
-        self.user_phone = None
-        self.user_timezone = None
-        self.chats = []
-        self.is_fetching = False
-        self.fetch_task = None
-        self.current_chat_id = None
-        self.current_chat_name = None
+        self.setMinimumSize(1000, 700)
+        self.is_dark_mode = True
         self.init_ui()
+        self.apply_stylesheet()
 
     def init_ui(self):
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("""
-            QTabWidget::pane {
-                background-color: #212121;
-                border: none;
-            }
-            QTabBar::tab {
-                background-color: #2E2E2E;
-                color: #B0BEC5;
-                padding: 12px 24px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-            }
-            QTabBar::tab:selected {
-                background-color: #424242;
-                border-bottom: 3px solid #1E88E5;
-                color: #FFFFFF;
-            }
-            QTabBar::tab:!selected {
-                background-color: #2E2E2E;
-            }
-            QTabBar::tab:hover {
-                background-color: #383838;
-            }
-        """)
         self.setCentralWidget(self.tabs)
 
         self.login_tab = QWidget()
@@ -363,49 +244,113 @@ class MainWindow(QMainWindow):
         self.setup_logs_tab()
         self.tabs.addTab(self.logs_tab, "Logs")
 
-        self.statusBar().setStyleSheet(
-            "background-color: #2E2E2E; color: #B0BEC5; font-family: 'Segoe UI'; font-size: 11pt; padding: 6px;")
         self.statusBar().showMessage("Ready")
 
-    def setup_login_tab(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(25)
+        self.telegram = None
+        self.user_phone = None
+        self.user_timezone = None
+        self.chats = []
+        self.is_fetching = False
+        self.fetch_task = None
+        self.current_chat_id = None
+        self.current_chat_name = None
 
-        # Account Selection Section
-        account_frame = QFrame()
-        account_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        account_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
-        account_layout = QHBoxLayout()
-        account_layout.setSpacing(15)
-        account_label = QLabel("Select Account:")
-        account_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
-        self.account_combo = QComboBox()
-        self.account_combo.addItem("New Account")
-        self.account_combo.currentIndexChanged.connect(
-            self.on_account_selected)
-        self.account_combo.setMinimumWidth(350)
-        self.account_combo.setMinimumHeight(40)
-        self.account_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #2E2E2E;
+    def apply_stylesheet(self):
+        if self.is_dark_mode:
+            stylesheet = """
+            QMainWindow {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #1B263B, stop:1 #2F0F5E
+                );
                 color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+            }
+            QTabWidget::pane {
+                background-color: #1B263B;
+                border: none;
+            }
+            QTabBar::tab {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #2F0F5E, stop:1 #1B263B
+                );
+                color: #E0E0E0;
+                padding: 14px 28px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 13pt;
+                font-weight: 600;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+            QTabBar::tab:selected {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #9B59B6, stop:1 #1B263B
+                );
+                border-bottom: 4px solid #9B59B6;
+                color: #FFFFFF;
+            }
+            QTabBar::tab:!selected {
+                background: #2F0F5E;
+            }
+            QTabBar::tab:hover {
+                background: #3A1A6E;
+            }
+            QFrame {
+                background-color: #2A2A4A;
+                border: 1px solid #404040;
+                border-radius: 12px;
+                padding: 20px;
+                margin: 10px;
+            }
+            QLabel {
+                color: #E0E0E0;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 13pt;
+                font-weight: 500;
+                padding: 8px;
+                min-width: 150px;
+                min-height: 40px;
+                text-align: left;
+            }
+            QLineEdit {
+                background-color: #3A3A5A;
+                color: #E0E0E0;
+                border: 1px solid #505050;
+                border-radius: 10px;
+                padding: 12px 18px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+                min-width: 350px;
+                min-height: 40px;
+                text-align: left;
+            }
+            QLineEdit:focus {
+                border: 2px solid #9B59B6;
+                background-color: #40406A;
+            }
+            QLineEdit:disabled {
+                background-color: #2A2A4A;
+                color: #B0BEC5;
+            }
+            QComboBox {
+                background-color: #3A3A5A;
+                color: #E0E0E0;
+                border: 1px solid #505050;
+                border-radius: 10px;
+                padding: 12px 18px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
                 font-size: 12pt;
                 min-width: 350px;
                 min-height: 40px;
             }
             QComboBox:hover {
-                background-color: #383838;
-                border: 1px solid #666666;
+                background-color: #40406A;
+                border: 1px solid #606080;
             }
             QComboBox::drop-down {
-                width: 24px;
+                width: 30px;
                 border: none;
                 background: transparent;
             }
@@ -413,21 +358,412 @@ class MainWindow(QMainWindow):
                 image: none;
                 width: 12px;
                 height: 12px;
-                margin-right: 8px;
+                margin-right: 10px;
                 border-left: 6px solid transparent;
                 border-right: 6px solid transparent;
                 border-top: 6px solid #E0E0E0;
             }
             QComboBox QAbstractItemView {
-                background-color: #2E2E2E;
+                background-color: #3A3A5A;
                 color: #E0E0E0;
-                selection-background-color: #1E88E5;
+                selection-background-color: #9B59B6;
                 selection-color: #FFFFFF;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 4px;
+                border: none;
+                border-radius: 10px;
+                padding: 0px;
+                margin: 0px;
+                outline: 0px;
             }
-        """)
+            QComboBox QAbstractItemView::item {
+                padding: 12px;
+                background-color: #3A3A5A;
+                color: #E0E0E0;
+                border: none;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #9B59B6;
+                color: #FFFFFF;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #40406A;
+                color: #E0E0E0;
+            }
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #9B59B6, stop:1 #6A1B9A
+                );
+                color: #FFFFFF;
+                border: none;
+                border-radius: 10px;
+                padding: 12px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+                font-weight: 600;
+                transition: background-color 0.2s;
+            }
+            QPushButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #AB69C6, stop:1 #7A2BAA
+                );
+            }
+            QPushButton:pressed {
+                background: #6A1B9A;
+            }
+            QPushButton[delete="true"] {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E74C3C, stop:1 #C0392B
+                );
+            }
+            QPushButton[delete="true"]:hover {
+                background: #F75C4C;
+            }
+            QPushButton[delete="true"]:pressed {
+                background: #B0291B;
+            }
+            QTextEdit {
+                background-color: #3A3A5A;
+                color: #E0E0E0;
+                border: 1px solid #505050;
+                border-radius: 10px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 14pt;
+            }
+            QListWidget {
+                background-color: #3A3A5A;
+                color: #E0E0E0;
+                border: 1px solid #505050;
+                border-radius: 10px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+            }
+            QListWidget::item:selected {
+                background-color: #9B59B6;
+                color: #FFFFFF;
+            }
+            QListWidget::item:hover {
+                background-color: #40406A;
+            }
+            QTableWidget {
+                background-color: #3A3A5A;
+                color: #E0E0E0;
+                border: 1px solid #505050;
+                border-radius: 10px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+            }
+            QTableWidget::item:selected {
+                background-color: #9B59B6;
+                color: #FFFFFF;
+            }
+            QTableWidget::item:hover {
+                background-color: #40406A;
+            }
+            QHeaderView::section {
+                background-color: #3A3A5A;
+                color: #B0BEC5;
+                padding: 6px;
+                border: 1px solid #505050;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+            }
+            QProgressBar {
+                border: 1px solid #505050;
+                border-radius: 10px;
+                background-color: #3A3A5A;
+                text-align: center;
+                color: #E0E0E0;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 11pt;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #9B59B6, stop:1 #6A1B9A
+                );
+                border-radius: 10px;
+            }
+            QStatusBar {
+                background: #2F0F5E;
+                color: #B0BEC5;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 11pt;
+                padding: 8px;
+            }
+            """
+        else:
+            stylesheet = """
+            QMainWindow {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #E0E0E0, stop:1 #FFFFFF
+                );
+                color: #212121;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+            }
+            QTabWidget::pane {
+                background-color: #FFFFFF;
+                border: none;
+            }
+            QTabBar::tab {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #D0D0D0, stop:1 #E0E0E0
+                );
+                color: #616161;
+                padding: 14px 28px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 13pt;
+                font-weight: 600;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+            }
+            QTabBar::tab:selected {
+                background: #F5F5F5;
+                border-bottom: 4px solid #9B59B6;
+                color: #212121;
+            }
+            QTabBar::tab:!selected {
+                background: #D0D0D0;
+            }
+            QTabBar::tab:hover {
+                background: #E5E5E5;
+            }
+            QFrame {
+                background-color: #F5F5F5;
+                border: 1px solid #B0BEC5;
+                border-radius: 12px;
+                padding: 20px;
+                margin: 10px;
+            }
+            QLabel {
+                color: #212121;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 13pt;
+                font-weight: 500;
+                padding: 8px;
+                min-width: 150px;
+                min-height: 40px;
+                text-align: left;
+            }
+            QLineEdit {
+                background-color: #FFFFFF;
+                color: #212121;
+                border: 1px solid #B0BEC5;
+                border-radius: 10px;
+                padding: 12px 18px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+                min-width: 350px;
+                min-height: 40px;
+                text-align: left;
+            }
+            QLineEdit:focus {
+                border: 2px solid #9B59B6;
+                background-color: #FAFAFA;
+            }
+            QLineEdit:disabled {
+                background-color: #E0E0E0;
+                color: #616161;
+            }
+            QComboBox {
+                background-color: #FFFFFF;
+                color: #212121;
+                border: 1px solid #B0BEC5;
+                border-radius: 10px;
+                padding: 12px 18px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+                min-width: 350px;
+                min-height: 40px;
+            }
+            QComboBox:hover {
+                background-color: #FAFAFA;
+                border: 1px solid #9E9E9E;
+            }
+            QComboBox::drop-down {
+                width: 30px;
+                border: none;
+                background: transparent;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                width: 12px;
+                height: 12px;
+                margin-right: 10px;
+                border-left: 6px solid transparent;
+                border-right: 6px solid transparent;
+                border-top: 6px solid #212121;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #FFFFFF;
+                color: #212121;
+                selection-background-color: #9B59B6;
+                selection-color: #FFFFFF;
+                border: none;
+                border-radius: 10px;
+                padding: 0px;
+                margin: 0px;
+                outline: 0px;
+            }
+            QComboBox QAbstractItemView::item {
+                padding: 12px;
+                background-color: #FFFFFF;
+                color: #212121;
+                border: none;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #9B59B6;
+                color: #FFFFFF;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #FAFAFA;
+                color: #212121;
+            }
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #9B59B6, stop:1 #6A1B9A
+                );
+                color: #FFFFFF;
+                border: none;
+                border-radius: 10px;
+                padding: 12px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+                font-weight: 600;
+                transition: background-color 0.2s;
+            }
+            QPushButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #AB69C6, stop:1 #7A2BAA
+                );
+            }
+            QPushButton:pressed {
+                background: #6A1B9A;
+            }
+            QPushButton[delete="true"] {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E74C3C, stop:1 #C0392B
+                );
+            }
+            QPushButton[delete="true"]:hover {
+                background: #F75C4C;
+            }
+            QPushButton[delete="true"]:pressed {
+                background: #B0291B;
+            }
+            QTextEdit {
+                background-color: #FFFFFF;
+                color: #212121;
+                border: 1px solid #B0BEC5;
+                border-radius: 10px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 14pt;
+            }
+            QListWidget {
+                background-color: #FFFFFF;
+                color: #212121;
+                border: 1px solid #B0BEC5;
+                border-radius: 10px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+            }
+            QListWidget::item:selected {
+                background-color: #9B59B6;
+                color: #FFFFFF;
+            }
+            QListWidget::item:hover {
+                background-color: #FAFAFA;
+            }
+            QTableWidget {
+                background-color: #FFFFFF;
+                color: #212121;
+                border: 1px solid #B0BEC5;
+                border-radius: 10px;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+            }
+            QTableWidget::item:selected {
+                background-color: #9B59B6;
+                color: #FFFFFF;
+            }
+            QTableWidget::item:hover {
+                background-color: #FAFAFA;
+            }
+            QHeaderView::section {
+                background-color: #E0E0E0;
+                color: #616161;
+                padding: 6px;
+                border: 1px solid #B0BEC5;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 12pt;
+            }
+            QProgressBar {
+                border: 1px solid #B0BEC5;
+                border-radius: 10px;
+                background-color: #FFFFFF;
+                text-align: center;
+                color: #212121;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 11pt;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #9B59B6, stop:1 #6A1B9A
+                );
+                border-radius: 10px;
+            }
+            QStatusBar {
+                background: #E0E0E0;
+                color: #616161;
+                font-family: 'Segoe UI', 'Arial', sans-serif;
+                font-size: 11pt;
+                padding: 8px;
+            }
+            """
+        self.setStyleSheet(stylesheet)
+        FetchMessagesDialog.setStyleSheet(self, stylesheet)
+
+    def toggle_theme(self):
+        self.is_dark_mode = not self.is_dark_mode
+        self.apply_stylesheet()
+        self.theme_toggle_button.setText(
+            "🌙 Dark Mode" if not self.is_dark_mode else "☀️ Light Mode")
+
+    # Updated setup_login_tab method to improve layout and styling
+
+    def setup_login_tab(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(50, 50, 50, 50)
+        layout.setSpacing(50)
+
+        # Theme Toggle Button
+        self.theme_toggle_button = QPushButton("🌙 Dark Mode")
+        self.theme_toggle_button.clicked.connect(self.toggle_theme)
+        self.theme_toggle_button.setMinimumHeight(50)
+        layout.addWidget(self.theme_toggle_button,
+                         alignment=Qt.AlignmentFlag.AlignRight)
+
+        # Account Selection Section
+        account_frame = QFrame()
+        account_frame.setMinimumHeight(100)
+        account_layout = QHBoxLayout()
+        account_layout.setSpacing(30)
+        account_label = QLabel("Select Account:")
+        account_label.setMinimumWidth(200)
+        account_label.setMinimumHeight(50)
+        self.account_combo = QComboBox()
+        self.account_combo.addItem("New Account")
+        self.account_combo.currentIndexChanged.connect(
+            self.on_account_selected)
+        self.account_combo.setMinimumWidth(400)
+        self.account_combo.setMinimumHeight(50)
         account_layout.addWidget(account_label)
         account_layout.addWidget(self.account_combo)
         account_frame.setLayout(account_layout)
@@ -435,35 +771,16 @@ class MainWindow(QMainWindow):
 
         # Phone Number Section
         phone_frame = QFrame()
-        phone_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        phone_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
+        phone_frame.setMinimumHeight(100)
         phone_layout = QHBoxLayout()
-        phone_layout.setSpacing(15)
+        phone_layout.setSpacing(30)
         phone_label = QLabel("Phone Number:")
-        phone_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
+        phone_label.setMinimumWidth(200)
+        phone_label.setMinimumHeight(50)
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("e.g., +989123456789")
-        self.phone_input.setMinimumWidth(350)
-        self.phone_input.setMinimumHeight(40)
-        self.phone_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #1E88E5;
-                background-color: #383838;
-            }
-        """)
+        self.phone_input.setMinimumWidth(400)
+        self.phone_input.setMinimumHeight(50)
         phone_layout.addWidget(phone_label)
         phone_layout.addWidget(self.phone_input)
         phone_frame.setLayout(phone_layout)
@@ -471,61 +788,25 @@ class MainWindow(QMainWindow):
 
         # API Credentials Section
         api_frame = QFrame()
-        api_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        api_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
+        api_frame.setMinimumHeight(150)
         api_layout = QGridLayout()
-        api_layout.setSpacing(15)
+        api_layout.setSpacing(30)
 
         api_id_label = QLabel("API ID:")
-        api_id_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
+        api_id_label.setMinimumWidth(200)
+        api_id_label.setMinimumHeight(50)
         self.api_id_input = QLineEdit()
         self.api_id_input.setPlaceholderText("Enter your Telegram API ID")
-        self.api_id_input.setMinimumWidth(350)
-        self.api_id_input.setMinimumHeight(40)
-        self.api_id_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #1E88E5;
-                background-color: #383838;
-            }
-        """)
+        self.api_id_input.setMinimumWidth(400)
+        self.api_id_input.setMinimumHeight(50)
 
         api_hash_label = QLabel("API Hash:")
-        api_hash_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
+        api_hash_label.setMinimumWidth(200)
+        api_hash_label.setMinimumHeight(50)
         self.api_hash_input = QLineEdit()
         self.api_hash_input.setPlaceholderText("Enter your Telegram API Hash")
-        self.api_hash_input.setMinimumWidth(350)
-        self.api_hash_input.setMinimumHeight(40)
-        self.api_hash_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #1E88E5;
-                background-color: #383838;
-            }
-        """)
+        self.api_hash_input.setMinimumWidth(400)
+        self.api_hash_input.setMinimumHeight(50)
 
         api_layout.addWidget(api_id_label, 0, 0)
         api_layout.addWidget(self.api_id_input, 0, 1)
@@ -536,14 +817,12 @@ class MainWindow(QMainWindow):
 
         # Timezone Section
         tz_frame = QFrame()
-        tz_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        tz_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
+        tz_frame.setMinimumHeight(100)
         tz_layout = QHBoxLayout()
-        tz_layout.setSpacing(15)
+        tz_layout.setSpacing(30)
         tz_label = QLabel("Timezone:")
-        tz_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
+        tz_label.setMinimumWidth(200)
+        tz_label.setMinimumHeight(50)
         self.tz_combo = QComboBox()
         self.tz_combo.addItems([
             "Iran (UTC+3:30)",
@@ -551,80 +830,28 @@ class MainWindow(QMainWindow):
             "United Kingdom (UTC+0:00)",
             "Other (UTC)"
         ])
-        self.tz_combo.setMinimumWidth(350)
-        self.tz_combo.setMinimumHeight(40)
-        self.tz_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
-            }
-            QComboBox:hover {
-                background-color: #383838;
-                border: 1px solid #666666;
-            }
-            QComboBox::drop-down {
-                width: 24px;
-                border: none;
-                background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                width: 12px;
-                height: 12px;
-                margin-right: 8px;
-                border-left: 6px solid transparent;
-                border-right: 6px solid transparent;
-                border-top: 6px solid #E0E0E0;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                selection-background-color: #1E88E5;
-                selection-color: #FFFFFF;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 4px;
-            }
-        """)
+        self.tz_combo.setMinimumWidth(400)
+        self.tz_combo.setMinimumHeight(50)
         tz_layout.addWidget(tz_label)
         tz_layout.addWidget(self.tz_combo)
         tz_frame.setLayout(tz_layout)
         layout.addWidget(tz_frame)
 
+        # Connect Button
         self.connect_button = QPushButton("🔒 Connect to Telegram")
         self.connect_button.clicked.connect(self.connect_telegram)
-        self.connect_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 12px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
-        layout.addWidget(self.connect_button)
+        self.connect_button.setMinimumHeight(60)
+        self.connect_button.setMinimumWidth(300)
+        layout.addWidget(self.connect_button,
+                         alignment=Qt.AlignmentFlag.AlignCenter)
 
+        # Status Label
         self.login_status = QLabel(
             "Enter your phone number, API credentials, and timezone to connect.")
         self.login_status.setStyleSheet(
-            "font-size: 11pt; color: #B0BEC5; font-family: 'Segoe UI';")
-        layout.addWidget(self.login_status)
+            "font-size: 12pt; color: #B0BEC5; font-family: 'Segoe UI', 'Arial', sans-serif;")
+        layout.addWidget(self.login_status,
+                         alignment=Qt.AlignmentFlag.AlignCenter)
 
         layout.addStretch()
         self.login_tab.setLayout(layout)
@@ -632,124 +859,29 @@ class MainWindow(QMainWindow):
         # Load existing accounts
         self.load_accounts()
 
-    def load_accounts(self):
-        """Load all user accounts from the database and populate the account combo box."""
-        users = load_all_users()
-        self.account_combo.clear()
-        self.account_combo.addItem("New Account")
-        for user_phone in users:
-            self.account_combo.addItem(user_phone)
-
-    def on_account_selected(self):
-        """Handle account selection from the combo box."""
-        selected_account = self.account_combo.currentText()
-        if selected_account == "New Account":
-            self.phone_input.clear()
-            self.api_id_input.clear()
-            self.api_hash_input.clear()
-            self.api_id_input.setEnabled(True)
-            self.api_hash_input.setEnabled(True)
-        else:
-            self.phone_input.setText(selected_account)
-            # Load API credentials from the database
-            credentials = load_user_settings(selected_account)
-            if credentials:
-                api_id, api_hash = credentials
-                self.api_id_input.setText(str(api_id))
-                self.api_hash_input.setText(api_hash)
-                self.api_id_input.setEnabled(False)
-                self.api_hash_input.setEnabled(False)
-            else:
-                self.api_id_input.clear()
-                self.api_hash_input.clear()
-                self.api_id_input.setEnabled(True)
-                self.api_hash_input.setEnabled(True)
-
     def setup_chats_tab(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(25)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(30)
 
         self.chats_list = QListWidget()
-        self.chats_list.setStyleSheet("""
-            QListWidget {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-            }
-            QListWidget::item:selected {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-            }
-            QListWidget::item:hover {
-                background-color: #383838;
-            }
-        """)
         layout.addWidget(self.chats_list)
 
         self.chats_tab.setLayout(layout)
 
     def setup_messages_tab(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(25)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(30)
 
         # Chat Selection Section
         chats_frame = QFrame()
-        chats_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        chats_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
         chats_layout = QHBoxLayout()
-        chats_layout.setSpacing(15)
+        chats_layout.setSpacing(20)
         chats_label = QLabel("Select Chat:")
-        chats_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
         self.messages_chat_combo = QComboBox()
         self.messages_chat_combo.setMinimumWidth(350)
         self.messages_chat_combo.setMinimumHeight(40)
-        self.messages_chat_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
-            }
-            QComboBox:hover {
-                background-color: #383838;
-                border: 1px solid #666666;
-            }
-            QComboBox::drop-down {
-                width: 24px;
-                border: none;
-                background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                width: 12px;
-                height: 12px;
-                margin-right: 8px;
-                border-left: 6px solid transparent;
-                border-right: 6px solid transparent;
-                border-top: 6px solid #E0E0E0;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                selection-background-color: #1E88E5;
-                selection-color: #FFFFFF;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 4px;
-            }
-        """)
         chats_layout.addWidget(chats_label)
         chats_layout.addWidget(self.messages_chat_combo)
         chats_frame.setLayout(chats_layout)
@@ -759,86 +891,31 @@ class MainWindow(QMainWindow):
         button_layout = QHBoxLayout()
         fetch_button = QPushButton("📥 Fetch Messages for Selected Chat")
         fetch_button.clicked.connect(self.fetch_chat_messages)
-        fetch_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 12px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
         button_layout.addWidget(fetch_button)
 
         self.cancel_button = QPushButton("❌ Cancel Fetching")
         self.cancel_button.clicked.connect(self.cancel_fetching)
         self.cancel_button.setVisible(False)
-        self.cancel_button.setStyleSheet("""
-            QPushButton {
-                background-color: #EF5350;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 12px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #F44336;
-            }
-            QPushButton:pressed {
-                background-color: #D32F2F;
-            }
-        """)
+        self.cancel_button.setProperty("delete", True)
         button_layout.addWidget(
             self.cancel_button, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        self.copy_summary_button = QPushButton("📋 Copy Summary")
+        self.copy_summary_button.clicked.connect(self.copy_summary)
+        self.copy_summary_button.setVisible(False)
+        button_layout.addWidget(self.copy_summary_button)
 
         layout.addLayout(button_layout)
 
         self.messages_display = QTextEdit()
         self.messages_display.setReadOnly(True)
         self.messages_display.setFont(QFont("Segoe UI", 14))
-        self.messages_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                font-family: 'Segoe UI';
-                font-size: 14pt;
-            }
-        """)
         layout.addWidget(self.messages_display)
 
         self.messages_progress = QProgressBar()
         self.messages_progress.setVisible(False)
         self.messages_progress.setRange(0, 100)
         self.messages_progress.setValue(0)
-        self.messages_progress.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #555555;
-                border-radius: 8px;
-                background-color: #2E2E2E;
-                text-align: center;
-                color: #E0E0E0;
-                font-family: 'Segoe UI';
-                font-size: 11pt;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1E88E5, stop:1 #42A5F5);
-                border-radius: 8px;
-            }
-        """)
         layout.addWidget(self.messages_progress)
 
         self.messages_status_label = QLabel("Ready to fetch messages.")
@@ -850,61 +927,20 @@ class MainWindow(QMainWindow):
 
     def setup_search_tab(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(30)
 
         # Input Section
         search_input_frame = QFrame()
-        search_input_frame.setFrameStyle(
-            QFrame.Shape.Box | QFrame.Shadow.Raised)
-        search_input_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
         search_input_layout = QHBoxLayout()
-        search_input_layout.setSpacing(15)
+        search_input_layout.setSpacing(20)
         search_label = QLabel("Search Chat (ID or Name):")
-        search_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("e.g., Chat ID or Name")
         self.search_input.setMinimumWidth(350)
         self.search_input.setMinimumHeight(40)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #1E88E5;
-                background-color: #383838;
-            }
-        """)
         search_button = QPushButton("🔍 Search")
         search_button.clicked.connect(self.search_chat)
-        search_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
         search_input_layout.addWidget(search_label)
         search_input_layout.addWidget(self.search_input)
         search_input_layout.addWidget(search_button)
@@ -913,15 +949,9 @@ class MainWindow(QMainWindow):
 
         # Output Section
         search_output_frame = QFrame()
-        search_output_frame.setFrameStyle(
-            QFrame.Shape.Box | QFrame.Shadow.Raised)
-        search_output_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
         search_output_layout = QVBoxLayout()
 
         search_output_label = QLabel("Search Results:")
-        search_output_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI'; margin-bottom: 10px;")
         search_output_layout.addWidget(search_output_label)
 
         self.search_results_table = QTableWidget()
@@ -935,56 +965,12 @@ class MainWindow(QMainWindow):
         self.search_results_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers)
         self.search_results_table.horizontalHeader().setStretchLastSection(True)
-        self.search_results_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-            }
-            QTableWidget::item:selected {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-            }
-            QTableWidget::item:hover {
-                background-color: #383838;
-            }
-            QHeaderView::section {
-                background-color: #2E2E2E;
-                color: #B0BEC5;
-                padding: 5px;
-                border: 1px solid #555555;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-            }
-        """)
         self.search_results_table.setColumnWidth(0, 100)
         self.search_results_table.setColumnWidth(1, 200)
         search_output_layout.addWidget(self.search_results_table)
 
-        # Fetch Messages Button
         fetch_messages_button = QPushButton("📥 Fetch Messages")
         fetch_messages_button.clicked.connect(self.fetch_from_search_result)
-        fetch_messages_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
         search_output_layout.addWidget(fetch_messages_button)
 
         search_output_frame.setLayout(search_output_layout)
@@ -992,113 +978,35 @@ class MainWindow(QMainWindow):
 
         self.search_tab.setLayout(layout)
 
+    # Updated setup_search_history_tab to increase history_messages_display size
+
     def setup_search_history_tab(self):
         self.history_layout = QVBoxLayout()
-        self.history_layout.setContentsMargins(30, 30, 30, 30)
-        self.history_layout.setSpacing(25)
+        self.history_layout.setContentsMargins(40, 40, 40, 40)
+        self.history_layout.setSpacing(30)
 
         # User Selection Section
         user_frame = QFrame()
-        user_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
-        user_frame.setStyleSheet(
-            "background-color: #3A3A3A; border: none; border-radius: 10px; padding: 15px;")
         user_layout = QHBoxLayout()
-        user_layout.setSpacing(15)
+        user_layout.setSpacing(20)
         user_label = QLabel("Select User:")
-        user_label.setStyleSheet(
-            "font-weight: 500; font-size: 14pt; color: #E0E0E0; font-family: 'Segoe UI';")
         self.user_combo = QComboBox()
         self.user_combo.addItem("Select a user...")
         self.user_combo.currentIndexChanged.connect(
             self.load_user_search_history)
         self.user_combo.setMinimumWidth(350)
         self.user_combo.setMinimumHeight(40)
-        self.user_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                min-width: 350px;
-                min-height: 40px;
-            }
-            QComboBox:hover {
-                background-color: #383838;
-                border: 1px solid #666666;
-            }
-            QComboBox::drop-down {
-                width: 24px;
-                border: none;
-                background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                width: 12px;
-                height: 12px;
-                margin-right: 8px;
-                border-left: 6px solid transparent;
-                border-right: 6px solid transparent;
-                border-top: 6px solid #E0E0E0;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                selection-background-color: #1E88E5;
-                selection-color: #FFFFFF;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                padding: 4px;
-            }
-        """)
         user_layout.addWidget(user_label)
         user_layout.addWidget(self.user_combo)
         user_frame.setLayout(user_layout)
         self.history_layout.addWidget(user_frame)
 
         self.history_list = QListWidget()
-        self.history_list.setStyleSheet("""
-            QListWidget {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-            }
-            QListWidget::item:selected {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-            }
-            QListWidget::item:hover {
-                background-color: #383838;
-            }
-        """)
         self.history_layout.addWidget(self.history_list)
 
         button_layout = QHBoxLayout()
         view_button = QPushButton("📜 View Messages")
         view_button.clicked.connect(self.view_history_messages)
-        view_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
         button_layout.addWidget(view_button)
         self.history_layout.addLayout(button_layout)
 
@@ -1109,105 +1017,28 @@ class MainWindow(QMainWindow):
         self.history_messages_display = QTextEdit()
         self.history_messages_display.setReadOnly(True)
         self.history_messages_display.setFont(QFont("Segoe UI", 14))
-        self.history_messages_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                font-family: 'Segoe UI';
-                font-size: 14pt;
-            }
-        """)
+        self.history_messages_display.setMinimumHeight(400)  # Increased size
+        self.history_messages_display.setMinimumWidth(600)
         messages_layout.addWidget(self.history_messages_display)
 
         manage_buttons_layout = QHBoxLayout()
         delete_recent_button = QPushButton("🗑️ Delete Recent Messages")
         delete_recent_button.clicked.connect(self.delete_recent_messages)
-        delete_recent_button.setStyleSheet("""
-            QPushButton {
-                background-color: #EF5350;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #F44336;
-            }
-            QPushButton:pressed {
-                background-color: #D32F2F;
-            }
-        """)
+        delete_recent_button.setProperty("delete", True)
         manage_buttons_layout.addWidget(delete_recent_button)
 
         delete_date_button = QPushButton("🗓️ Delete Messages from Date")
         delete_date_button.clicked.connect(self.delete_messages_from_date)
-        delete_date_button.setStyleSheet("""
-            QPushButton {
-                background-color: #EF5350;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #F44336;
-            }
-            QPushButton:pressed {
-                background-color: #D32F2F;
-            }
-        """)
+        delete_date_button.setProperty("delete", True)
         manage_buttons_layout.addWidget(delete_date_button)
 
         delete_all_button = QPushButton("🗑️ Delete All Messages")
         delete_all_button.clicked.connect(self.delete_all_messages)
-        delete_all_button.setStyleSheet("""
-            QPushButton {
-                background-color: #EF5350;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #F44336;
-            }
-            QPushButton:pressed {
-                background-color: #D32F2F;
-            }
-        """)
+        delete_all_button.setProperty("delete", True)
         manage_buttons_layout.addWidget(delete_all_button)
 
         back_button = QPushButton("⬅️ Back to List")
         back_button.clicked.connect(self.back_to_history_list)
-        back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #42A5F5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #64B5F6;
-            }
-            QPushButton:pressed {
-                background-color: #1976D2;
-            }
-        """)
         manage_buttons_layout.addWidget(back_button)
 
         messages_layout.addLayout(manage_buttons_layout)
@@ -1227,29 +1058,11 @@ class MainWindow(QMainWindow):
 
     def setup_refresh_tab(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(25)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(30)
 
         refresh_button = QPushButton("🔄 Refresh Chat List")
         refresh_button.clicked.connect(self.refresh_chats)
-        refresh_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 12px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
         layout.addWidget(refresh_button)
 
         self.refresh_status = QLabel("Click to refresh the chat list.")
@@ -1262,48 +1075,50 @@ class MainWindow(QMainWindow):
 
     def setup_logs_tab(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(25)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(30)
 
         self.logs_text = QTextEdit()
         self.logs_text.setReadOnly(True)
-        self.logs_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #2E2E2E;
-                color: #E0E0E0;
-                border: 1px solid #555555;
-                border-radius: 8px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-            }
-        """)
         layout.addWidget(self.logs_text)
 
         refresh_logs_button = QPushButton("🔄 Refresh Logs")
         refresh_logs_button.clicked.connect(self.update_logs)
-        refresh_logs_button.setStyleSheet("""
-            QPushButton {
-                background-color: #1E88E5;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Segoe UI';
-                font-size: 12pt;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #42A5F5;
-            }
-            QPushButton:pressed {
-                background-color: #1565C0;
-            }
-        """)
         layout.addWidget(refresh_logs_button)
 
         self.logs_tab.setLayout(layout)
 
         setup_logging(self.logs_text)
+
+    def load_accounts(self):
+        users = load_all_users()
+        self.account_combo.clear()
+        self.account_combo.addItem("New Account")
+        for user_phone in users:
+            self.account_combo.addItem(user_phone)
+
+    def on_account_selected(self):
+        selected_account = self.account_combo.currentText()
+        if selected_account == "New Account":
+            self.phone_input.clear()
+            self.api_id_input.clear()
+            self.api_hash_input.clear()
+            self.api_id_input.setEnabled(True)
+            self.api_hash_input.setEnabled(True)
+        else:
+            self.phone_input.setText(selected_account)
+            credentials = load_user_settings(selected_account)
+            if credentials:
+                api_id, api_hash = credentials
+                self.api_id_input.setText(str(api_id))
+                self.api_hash_input.setText(api_hash)
+                self.api_id_input.setEnabled(False)
+                self.api_hash_input.setEnabled(False)
+            else:
+                self.api_id_input.clear()
+                self.api_hash_input.clear()
+                self.api_id_input.setEnabled(True)
+                self.api_hash_input.setEnabled(True)
 
     def load_users_with_search_history(self):
         users = load_users_with_search_history()
@@ -1375,18 +1190,17 @@ class MainWindow(QMainWindow):
         api_id_text = self.api_id_input.text().strip()
         api_hash = self.api_hash_input.text().strip()
         if not api_id_text or not api_hash:
-            QMessageBox.warning(
-                self, "Input Error", "API ID and API Hash cannot be empty.")
+            QMessageBox.warning(self, "Input Error",
+                                "API ID and API Hash cannot be empty.")
             return
 
         try:
             api_id = int(api_id_text)
         except ValueError:
-            QMessageBox.warning(
-                self, "Input Error", "API ID must be a valid integer.")
+            QMessageBox.warning(self, "Input Error",
+                                "API ID must be a valid integer.")
             return
 
-        # Save API credentials to the database if it's a new account
         if self.account_combo.currentText() == "New Account":
             try:
                 save_user_settings(self.user_phone, api_id, api_hash)
@@ -1395,7 +1209,6 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(
                     self, "Error", f"Failed to save API credentials: {e}")
                 return
-            # Update the account list
             self.load_accounts()
             self.account_combo.setCurrentText(self.user_phone)
 
@@ -1415,7 +1228,6 @@ class MainWindow(QMainWindow):
         async def connect_coro():
             try:
                 setup_database()
-                # Load API credentials from the database
                 credentials = load_user_settings(self.user_phone)
                 if not credentials:
                     raise ValueError(
@@ -1426,7 +1238,6 @@ class MainWindow(QMainWindow):
                 await self.telegram.connect()
                 user = await self.telegram.login(self.user_phone)
                 logger.info(f"Logged in as: {user.first_name} ({user.phone})")
-                # Update the API credentials in the database (to update last_login)
                 save_user_settings(self.user_phone, api_id, api_hash)
                 return user
             except Exception as e:
@@ -1445,7 +1256,6 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Logged in as {user.first_name}")
             self.fetch_initial_chats()
             self.load_users_with_search_history()
-            # Update the account list to reflect the last login order
             self.load_accounts()
             self.account_combo.setCurrentText(self.user_phone)
         except Exception as e:
@@ -1577,7 +1387,7 @@ class MainWindow(QMainWindow):
                 logger.warning("get_messages returned None.")
                 return "No messages found."
 
-            await self.update_progress(90)  # After fetching, set to 90%
+            await self.update_progress(90)
             self.messages_status_label.setText(
                 "Messages fetched, analyzing with AI...")
 
@@ -1588,12 +1398,10 @@ class MainWindow(QMainWindow):
                 for i, (sender, msg, timestamp, message_id) in enumerate(messages, 1):
                     local_time = timestamp.astimezone(self.user_timezone)
                     result += f"{i}. {sender}: {msg}\n   (ID: {message_id}, {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')})\n\n"
-                message_texts = [msg for _, msg, _, _ in messages]
                 logger.info("Summarizing messages...")
-                summary = await summarize_text(message_texts)
+                summary = await summarize_text(messages)
                 result += "=== Summary ===\n" + summary + "\n"
 
-                # Update progress to 100% after summarization
                 await self.update_progress(100)
             else:
                 result = "No messages found."
@@ -1637,6 +1445,7 @@ class MainWindow(QMainWindow):
             self.messages_progress.setVisible(True)
             self.messages_progress.setValue(0)
             self.cancel_button.setVisible(True)
+            self.copy_summary_button.setVisible(False)
             self.messages_display.clear()
             self.messages_status_label.setText("Fetching messages...")
 
@@ -1658,9 +1467,20 @@ class MainWindow(QMainWindow):
             self.fetch_task.cancel()
             self.is_fetching = False
             self.cancel_button.setVisible(False)
+            self.copy_summary_button.setVisible(False)
             self.messages_progress.setVisible(False)
             self.messages_display.setText("Fetching cancelled by user.")
             self.messages_status_label.setText("Fetching cancelled.")
+
+    def copy_summary(self):
+        text = self.messages_display.toPlainText()
+        summary_start = text.find("=== Summary ===")
+        if summary_start != -1:
+            summary_text = text[summary_start + len("=== Summary ===\n"):]
+            clipboard = QApplication.clipboard()
+            clipboard.setText(summary_text)
+            QMessageBox.information(
+                self, "Success", "Summary copied to clipboard!")
 
     def display_messages_in_tab(self, task):
         self.is_fetching = False
@@ -1672,14 +1492,18 @@ class MainWindow(QMainWindow):
                 self.messages_display.setText(result)
                 if "cancelled" in result.lower():
                     self.messages_status_label.setText("Fetching cancelled.")
+                    self.copy_summary_button.setVisible(False)
                 else:
                     self.messages_status_label.setText(
                         "Messages fetched successfully.")
+                    self.copy_summary_button.setVisible(True)
             else:
                 self.messages_display.setText("No messages found.")
                 self.messages_status_label.setText("No messages found.")
+                self.copy_summary_button.setVisible(False)
         except Exception as e:
             self.messages_status_label.setText("Error fetching messages.")
+            self.copy_summary_button.setVisible(False)
             logger.error(f"Error displaying messages in tab: {e}")
             QMessageBox.critical(
                 self, "Error", f"Error fetching messages: {e}")
@@ -1742,7 +1566,6 @@ class MainWindow(QMainWindow):
         chat_name = self.search_results_table.item(selected_row, 1).text()
         username = self.search_results_table.item(selected_row, 2).text()
 
-        # Update the chats list to include this chat
         found = False
         for i, chat in enumerate(self.chats):
             if chat[0] == chat_id:
@@ -1751,7 +1574,6 @@ class MainWindow(QMainWindow):
         if not found:
             self.chats.append((chat_id, chat_name, username))
 
-        # Update messages_chat_combo
         self.messages_chat_combo.clear()
         for chat_id_, chat_name_, username_ in self.chats:
             item_text = f"{chat_name_} (ID: {chat_id_})"
@@ -1759,16 +1581,13 @@ class MainWindow(QMainWindow):
                 item_text += f" (@{username_})"
             self.messages_chat_combo.addItem(item_text)
 
-        # Set the selected chat in messages_chat_combo
         self.messages_chat_combo.setCurrentText(
             f"{chat_name} (ID: {chat_id})" + (f" (@{username})" if username else ""))
 
-        # Save to search history
         search_term = username if username else chat_name
         save_search_history(search_term, self.user_phone)
         self.load_users_with_search_history()
 
-        # Switch to Messages tab and fetch messages
         self.tabs.setCurrentWidget(self.messages_tab)
         self.fetch_chat_messages()
 
@@ -1779,9 +1598,7 @@ class MainWindow(QMainWindow):
                                 "Please select a chat with saved messages.")
             return
 
-        # Extract chat_id and chat_name from the item text
         item_text = selected_item.text()
-        # Format: "chat_name (ID: chat_id)" or "chat_name (ID: chat_id) (@username)"
         parts = item_text.split("(ID: ")
         chat_name = parts[0].strip()
         chat_id_part = parts[1].split(")")[0]
@@ -1818,10 +1635,7 @@ class MainWindow(QMainWindow):
             return
 
         reply = QMessageBox.question(
-            self, "Confirm Deletion",
-            f"Are you sure you want to delete the last {count} messages for {self.current_chat_name}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
+            self, "Confirm Deletion", f"Are you sure you want to delete the last {count} messages for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
                 self.current_chat_id, self.user_phone, num_messages=count)
@@ -1856,10 +1670,7 @@ class MainWindow(QMainWindow):
             return
 
         reply = QMessageBox.question(
-            self, "Confirm Deletion",
-            f"Are you sure you want to delete messages from {date} for {self.current_chat_name}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
+            self, "Confirm Deletion", f"Are you sure you want to delete messages from {date} for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
                 self.current_chat_id, self.user_phone, specific_date=date, user_timezone=self.user_timezone)
@@ -1882,10 +1693,7 @@ class MainWindow(QMainWindow):
             return
 
         reply = QMessageBox.question(
-            self, "Confirm Deletion",
-            f"Are you sure you want to delete all messages for {self.current_chat_name}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
+            self, "Confirm Deletion", f"Are you sure you want to delete all messages for {self.current_chat_name}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             deleted_count = delete_messages(
                 self.current_chat_id, self.user_phone)
@@ -1922,6 +1730,7 @@ class MainWindow(QMainWindow):
 
 def run_gui():
     app = QApplication(sys.argv)
+    app.setStyle(QStyleFactory.create('Fusion'))
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
     try:
@@ -1932,3 +1741,7 @@ def run_gui():
     except Exception as e:
         logger.error(f"Error in run_gui: {e}", exc_info=True)
         raise
+
+
+if __name__ == '__main__':
+    run_gui()
