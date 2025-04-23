@@ -1,7 +1,7 @@
 
 # TeleSam - Telegram Chat Manager
 
-**TeleSam** is an open-source desktop application for managing and analyzing Telegram chats. Built with Python and PyQt6, it integrates with the Telegram API to fetch chats and messages, stores data locally in SQLite, and uses AI for message summarization via OpenRouter API. The tool offers a clean, customizable GUI with dark/light themes, making it ideal for organizing and exploring Telegram conversations.
+**TeleSam** is an open-source desktop application for managing and analyzing Telegram chats. Built with Python and PyQt6, it integrates with the Telegram API to fetch chats and messages, stores data locally in PostgreSQl, and uses AI for message summarization via OpenRouter API. The tool offers a clean, customizable GUI with dark/light themes, making it ideal for organizing and exploring Telegram conversations.
 
 ## Features
 
@@ -22,7 +22,7 @@
 
 - **Frontend**: PyQt6 for the graphical interface.
 - **Backend**: Python, `asyncio`, `qasync` for Telegram API integration.
-- **Database**: SQLite with SQLAlchemy for local storage.
+- **Database**: PostgreSQL with SQLAlchemy for local storage.
 - **AI**: OpenRouter API for message summarization.
 - **Dependencies**: `python-telegram`, `pytz`, `sqlalchemy`, etc.
 
@@ -59,7 +59,9 @@
      ```
    - Edit `config.py` to set `DATABASE_URL` and other settings:
      ```python
-     DATABASE_URL = "sqlite:///telesam.db"
+     ```
+     Edit PostgreSQL configuration
+     ```
      VERBOSE_LOGGING = True
      ```
 
