@@ -13,7 +13,7 @@
   - Specific date (e.g., 10 April 2025)
 - **AI Summarization**: Generate conversation summaries using OpenRouter API.
 - **Search Functionality**: Search chats by ID, name, or username with cached history.
-- **Local Database Storage**: Store chats and messages in a SQLite database.
+- **Local Database Storage**: Store chats and messages in a PostgreSQL database.
 - **Message History Management**: View and delete saved messages.
 - **Customizable GUI**: Toggle between dark and light themes with PyQt6 interface.
 - **Real-Time Logging**: Monitor system activity with a dedicated Logs tab.
