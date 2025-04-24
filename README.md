@@ -122,4 +122,4 @@ This project is licensed under the MIT License. See the [LICENSE] file.
 
 ## Contact
 
-For questions or feedback, open an issue on [GitHub](https://github.com/Sina-Amare/telesam/issues).
+For questions or feedback, open an issue on [GitHub](https://github.com/Sina-Amare/telesum/issues).
