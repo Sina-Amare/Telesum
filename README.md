@@ -37,7 +37,7 @@
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/yourusername/telesam.git
+   git clone https://github.com/Sina-Amare/telesam.git
    cd telesam
    ```
 
