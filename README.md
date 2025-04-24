@@ -118,8 +118,8 @@ Please follow [PEP 8](https://www.python.org/dev/peps/pep-0008/) for Python code
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file.
+This project is licensed under the MIT License. See the [LICENSE] file.
 
 ## Contact
 
-For questions or feedback, open an issue on [GitHub](https://github.com/yourusername/telesam/issues).
+For questions or feedback, open an issue on [GitHub](https://github.com/Sina-Amare/telesam/issues).
